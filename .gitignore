@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Secrets
+.env
+
+# Local warehouse + logs (rebuilt by `gridcarbon backfill`)
+data/*.duckdb
+data/*.duckdb.wal
+data/*.log
+
+# dbt (Phase 5)
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+
+# Editors / OS
+.idea/
+.vscode/
+*.code-workspace
+.DS_Store
+Thumbs.db

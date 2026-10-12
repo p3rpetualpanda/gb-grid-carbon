@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gridcarbon"
+version = "0.1.0"
+description = "Automated pipeline, analysis and 48h forecast of Great Britain grid carbon intensity."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "requests>=2.32",
+    "tenacity>=9.0",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "duckdb>=1.1",
+    "pytz",  # duckdb needs it to return TIMESTAMPTZ values as Python datetimes
+    "pandas>=2.2",
+    "pyarrow>=16",
+    "typer>=0.12",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2",
+    "responses>=0.25",
+    "ruff>=0.6",
+    "pre-commit>=3.7",
+]
+# Added in later phases:
+dbt = ["dbt-core>=1.9", "dbt-duckdb>=1.9"]
+ml = ["lightgbm>=4.3", "scikit-learn>=1.5", "shap>=0.46"]
+app = ["streamlit>=1.38", "plotly>=5.22"]
+
+[project.scripts]
+gridcarbon = "gridcarbon.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "DTZ"]
