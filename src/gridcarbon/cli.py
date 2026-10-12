@@ -10,7 +10,7 @@ import typer
 
 from gridcarbon.config import Settings, get_settings
 from gridcarbon.http import ApiClient
-from gridcarbon.load import connect, tracked_run, utcnow
+from gridcarbon.load import connect, tracked_run, upsert, utcnow
 from gridcarbon.pipeline import (
     BACKFILL_DEFAULT,
     DATASETS,
@@ -35,6 +35,7 @@ STATUS_TABLES = {
     "raw.weather_historical_forecast": "time",
     "raw.official_forecast_snapshots": "issued_at",
     "raw.weather_forecast_snapshots": "issued_at",
+    "ml.model_forecasts": "issued_at",
 }
 
 
@@ -116,6 +117,21 @@ def incremental(
         if snapshots:
             snapshot_forecasts(con, client, now, run)
     typer.echo(f"Incremental finished: {run['rows_loaded']:,} rows (run {run['run_id']}).")
+
+
+@app.command()
+def predict() -> None:
+    """Train on all history and write a 48h forecast to ml.model_forecasts (needs dbt marts)."""
+    from gridcarbon.forecast import predict_live  # needs the optional [ml] extra
+
+    settings = _setup()
+    con = connect(settings)
+    with tracked_run(con, "predict") as run:
+        rows = predict_live(con, utcnow())
+        run["rows_loaded"] = upsert(
+            con, "ml.model_forecasts", rows, ("issued_at", "period_from"), run["run_id"]
+        )
+    typer.echo(f"Forecast issued at {rows['issued_at'].iloc[0]}: {len(rows)} half-hours.")
 
 
 @app.command()

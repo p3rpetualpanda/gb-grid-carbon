@@ -49,6 +49,9 @@ DDL: dict[str, str] = {
     "raw.weather_forecast_snapshots": f"""
         issued_at TIMESTAMPTZ NOT NULL, time TIMESTAMPTZ NOT NULL, point_id VARCHAR NOT NULL,
         latitude DOUBLE, longitude DOUBLE, {_WEATHER_VARS}, {_LINEAGE}""",
+    "ml.model_forecasts": f"""
+        issued_at TIMESTAMPTZ NOT NULL, period_from TIMESTAMPTZ NOT NULL, lead INTEGER NOT NULL,
+        yhat DOUBLE, model_version VARCHAR, {_LINEAGE}""",
     "meta.pipeline_runs": """
         run_id VARCHAR NOT NULL, command VARCHAR NOT NULL, started_at TIMESTAMPTZ NOT NULL,
         finished_at TIMESTAMPTZ, status VARCHAR NOT NULL, rows_loaded BIGINT, error VARCHAR""",
@@ -78,7 +81,7 @@ def connect(settings: Settings) -> duckdb.DuckDBPyConnection:
 
 def prepare(con: duckdb.DuckDBPyConnection) -> None:
     con.execute("SET TimeZone = 'UTC'")
-    for schema in ("raw", "meta"):
+    for schema in ("raw", "ml", "meta"):
         con.execute(f"CREATE SCHEMA IF NOT EXISTS {schema}")
     for table, columns in DDL.items():
         con.execute(f"CREATE TABLE IF NOT EXISTS {table} ({columns})")

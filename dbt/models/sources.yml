@@ -24,3 +24,10 @@ sources:
         description: Hourly weather forecasts as issued (for leakage-safe model training).
       - name: weather_forecast_snapshots
         description: Live weather forecast captured at each pipeline run.
+
+  - name: ml
+    description: Model outputs written by `gridcarbon predict` (src/gridcarbon/forecast.py).
+    schema: ml
+    tables:
+      - name: model_forecasts
+        description: Our 48h forecast per pipeline run (issued_at, period_from, lead 1-96).

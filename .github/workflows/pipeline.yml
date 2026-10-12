@@ -36,7 +36,7 @@ jobs:
           cache-dependency-path: pyproject.toml
 
       - name: Install
-        run: pip install -e ".[dbt]"
+        run: pip install -e ".[dbt,ml]"
 
       - name: Extract + load
         run: gridcarbon incremental
@@ -48,6 +48,13 @@ jobs:
       - name: Transform + test
         working-directory: dbt
         run: dbt build --profiles-dir .
+
+      - name: Forecast next 48h
+        run: gridcarbon predict
+
+      - name: Score forecasts (model vs NESO)
+        working-directory: dbt
+        run: dbt run --profiles-dir . --select fct_model_vs_official
 
       - name: Build docs site
         working-directory: dbt
