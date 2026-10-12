@@ -14,9 +14,10 @@ Material for the CV, LinkedIn and interviews. Every number comes from `docs/find
 - Developed a 48-hour LightGBM carbon-intensity forecast with leakage-safe features and a 12-month
   rolling-origin backtest; MAE 26.8 gCO₂/kWh, 40% better than naïve baselines, and scored live
   against the system operator's forecast every pipeline run.
-- Analysed 9 years of grid data: intensity fell 48% (2018–2025), midday is now the cleanest time
-  from spring to autumn, and smart EV charging cuts charging emissions by 29% (~113 kg CO₂ per car
-  per year). Published as a live Streamlit dashboard with a "when should I run it?" planner.
+- Analysed 9 years of grid data with bootstrap confidence intervals: intensity fell 48% (2018–2025),
+  midday is now the cleanest time from spring to autumn, and smart EV charging cuts charging
+  emissions by 29% (95% CI 26–32%). Wrote a one-page stakeholder brief with recommendations and an
+  A/B test design, and published a live Streamlit dashboard with a "when should I run it?" planner.
 
 ## LinkedIn post (draft)
 
@@ -38,6 +39,17 @@ Material for the CV, LinkedIn and interviews. Every number comes from `docs/find
 (Attach `docs/img/time_of_day_heatmap.png`.)
 
 ## Interview questions you should be ready for
+
+**Walk me through your recommendations.** Use [`brief.md`](brief.md): bottom line first (29%
+lower charging emissions by changing *when*), three findings, three recommendations with impact,
+how you'd measure it (A/B test on the default schedule), then the limitations.
+
+**How do you know the 29% isn't chance?** 95% block-bootstrap interval (26–32%): resample whole
+weeks so weather spells stay together, recompute 1,000 times. The interval excludes zero.
+
+**What's the biggest weakness in your analysis?** Average vs marginal emissions: extra demand is
+usually met by gas, so real savings from shifting load could differ. It's the first thing to
+check before a public claim.
 
 **Why dbt? What's the difference between staging and marts?**
 Staging renames and types one source each (views); intermediate builds reusable pieces (time spine,

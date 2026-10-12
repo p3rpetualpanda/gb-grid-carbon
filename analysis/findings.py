@@ -14,6 +14,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
+import pandas as pd  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 IMG = ROOT / "docs" / "img"
@@ -61,6 +62,28 @@ def save(fig, name: str) -> str:
     return f"img/{name}"
 
 
+RNG = np.random.default_rng(7)  # fixed seed: the report regenerates identically
+
+
+def block_ci(df, stat, reps: int = 1000, strata: str | None = None) -> tuple[float, float]:
+    """95% bootstrap CI of stat(df), resampling whole weeks (column `wk`) with replacement.
+
+    Whole weeks keep multi-day weather spells together; resampling single half-hours would
+    treat correlated hours as independent and give falsely narrow intervals."""
+    parts = [df] if strata is None else [g for _, g in df.groupby(strata)]
+    weeks = [[g for _, g in p.groupby("wk")] for p in parts]
+    draws = [
+        stat(pd.concat([w[i] for w in weeks for i in RNG.integers(0, len(w), len(w))]))
+        for _ in range(reps)
+    ]
+    lo, hi = np.percentile(draws, [2.5, 97.5])
+    return float(lo), float(hi)
+
+
+def ci(lo: float, hi: float, fmt: str = ".0%") -> str:
+    return f"95% CI {lo:{fmt}} to {hi:{fmt}}"
+
+
 LAST_12M = (
     "period_from > (select max(period_from) from marts.fct_grid_halfhourly) - interval 365 day"
 )
@@ -91,9 +114,19 @@ for col, colour, label in (("gas", ORANGE, "Gas"), ("wind", BLUE, "Wind")):
 ax.legend(frameon=False, loc="upper center", ncol=2, labelcolor=INK2)
 ax.set_xticks(mix.year)
 img_mix = save(fig, "gas_vs_wind.png")
+ends = q(f"""
+    select year, date_trunc('week', date_local) as wk, actual_gco2_kwh as y
+    from marts.fct_grid_halfhourly
+    where year in ({first.year:.0f}, {last.year:.0f}) and actual_gco2_kwh is not null
+""")
+drop_ci = block_ci(
+    ends,
+    lambda s: 1 - s.y[s.year == last.year].mean() / s.y[s.year == first.year].mean(),
+    strata="year",
+)
 F["trend"] = (
-    f"Average carbon intensity fell **{drop:.0%}**, from **{first.mean_g:.0f}** gCO₂/kWh in "
-    f"{first.year:.0f} to **{last.mean_g:.0f}** in {last.year:.0f}. Wind's share of generation "
+    f"Average carbon intensity fell **{drop:.0%}** ({ci(*drop_ci)}), from **{first.mean_g:.0f}** "
+    f"gCO₂/kWh in {first.year:.0f} to **{last.mean_g:.0f}** in {last.year:.0f}. Wind's share of generation "
     f"went from {mix.wind.iloc[0]:.0f}% (2019) to {mix.wind.iloc[-1]:.0f}% ({mix.year.iloc[-1]:.0f}), "
     f"gas from {mix.gas.iloc[0]:.0f}% to {mix.gas.iloc[-1]:.0f}%, and coal from "
     f"{annual.coal.iloc[1]:.1f}% to {annual.coal.iloc[-1]:.1f}%."
@@ -130,11 +163,20 @@ cb.set_label("gCO₂/kWh (darker = dirtier)", color=INK2)
 cb.outline.set_visible(False)
 cb.ax.tick_params(colors=MUTED, length=0)
 img_heat = save(fig, "time_of_day_heatmap.png")
+night_day = q(f"""
+    select halfhour_slot, date_trunc('week', date_local) as wk, actual_gco2_kwh as y
+    from marts.fct_grid_halfhourly
+    where {LAST_12M} and halfhour_slot in (6, 36) and actual_gco2_kwh is not null
+""")
+tod_ci = block_ci(
+    night_day,
+    lambda s: 1 - s.y[s.halfhour_slot == 6].mean() / s.y[s.halfhour_slot == 36].mean(),
+)
 F["time_of_day"] = (
     f"Over the last 12 months the cleanest half-hour on average starts at **{hhmm(best.halfhour_slot)}**"
     f" ({best.g:.0f} gCO₂/kWh) and the dirtiest at **{hhmm(worst.halfhour_slot)}** ({worst.g:.0f}). "
     f"Electricity at 03:00 is **{1 - s3am / s6pm:.0%} cleaner** than at 18:00 "
-    f"({s3am:.0f} vs {s6pm:.0f})."
+    f"({s3am:.0f} vs {s6pm:.0f}; {ci(*tod_ci)})."
 )
 
 # 3. Weekday vs weekend -----------------------------------------------------------------------
@@ -148,20 +190,36 @@ wk = (
 )
 bh = q(f"""select avg(actual_gco2_kwh) from marts.fct_grid_halfhourly
            where {LAST_12M} and is_bank_holiday""").iloc[0, 0]  # fmt: skip
+week_rows = q(f"""
+    select is_weekend, date_trunc('week', date_local) as wk, actual_gco2_kwh as y
+    from marts.fct_grid_halfhourly
+    where {LAST_12M} and not is_bank_holiday and actual_gco2_kwh is not null
+""")
+wkd_ci = block_ci(week_rows, lambda s: 1 - s.y[s.is_weekend].mean() / s.y[~s.is_weekend].mean())
 F["weekend"] = (
     f"Weekends average **{wk[True]:.0f}** gCO₂/kWh vs **{wk[False]:.0f}** on weekdays "
-    f"(**{1 - wk[True] / wk[False]:.0%} cleaner**, lower demand); bank holidays average {bh:.0f}."
+    f"(**{1 - wk[True] / wk[False]:.0%} cleaner**, {ci(*wkd_ci)}; lower demand); bank holidays "
+    f"average {bh:.0f}."
 )
 
 # 4. Drivers: wind, temperature, sunshine (OLS, 2023+) ------------------------------------------
 d = q("""
     select actual_gco2_kwh as y, wind_speed_100m_kmh as wind, temperature_c as temp,
-           solar_radiation_wm2 as solar
+           solar_radiation_wm2 as solar, date_trunc('week', date_local) as wk
     from marts.fct_grid_halfhourly
     where year >= 2023 and actual_gco2_kwh is not null and wind_speed_100m_kmh is not null
 """)
+
+
+def wind_effect(s) -> float:
+    """gCO₂/kWh change per +10 km/h of wind, holding temperature and sunshine fixed (OLS)."""
+    Xs = np.column_stack([np.ones(len(s)), s.wind, s.temp, s.solar])
+    return -10 * np.linalg.lstsq(Xs, s.y, rcond=None)[0][1]
+
+
 X = np.column_stack([np.ones(len(d)), d.wind, d.temp, d.solar])
 beta, *_ = np.linalg.lstsq(X, d.y, rcond=None)
+wind_ci = block_ci(d, wind_effect, reps=500)
 r2 = 1 - ((d.y - X @ beta) ** 2).sum() / ((d.y - d.y.mean()) ** 2).sum()
 r_wind = np.corrcoef(d.wind, d.y)[0, 1]
 bins = d.assign(b=(d.wind // 5) * 5).groupby("b").y.agg(["mean", "size"])
@@ -173,7 +231,8 @@ img_wind = save(fig, "wind_vs_intensity.png")
 F["drivers"] = (
     f"Wind speed alone correlates at r = **{r_wind:.2f}** with intensity. A linear model on wind, "
     f"temperature and sunshine explains **R² = {r2:.2f}**: each +10 km/h of wind is associated with "
-    f"**{-10 * beta[1]:.0f} gCO₂/kWh lower** intensity, holding the others fixed (association, not "
+    f"**{-10 * beta[1]:.0f} gCO₂/kWh lower** intensity ({ci(*wind_ci, '.0f')}), holding the "
+    f"others fixed (association, not "
     f"proof of cause: wind also co-varies with season and demand)."
 )
 
@@ -225,19 +284,23 @@ night = q(f"""
     order by local_ts
 """)
 nights = []
-for _, n in night.groupby("night_of"):
+for night_of, n in night.groupby("night_of"):
     if len(n) < 26 or n.g.isna().any():  # 13 h of half-hours, complete nights only
         continue
     window = n.g.rolling(6).mean()  # 3-hour charge (6 half-hours)
-    nights.append((window.iloc[5], window.min()))  # plug in at 18:00 vs cleanest 3 h overnight
-plug_in, smart = (np.array(x) for x in zip(*nights, strict=True))
+    # plug in at 18:00 vs cleanest 3 h overnight
+    nights.append((pd.Timestamp(night_of).to_period("W").start_time, window.iloc[5], window.min()))
+ev = pd.DataFrame(nights, columns=["wk", "plug_in", "smart"])
+plug_in, smart = ev.plug_in.to_numpy(), ev.smart.to_numpy()
 kwh, n_evs = 7.0, 1_000_000
 saved_kg = ((plug_in - smart) * kwh).sum() / 1000 * 365 / len(nights)
+ev_ci = block_ci(ev, lambda s: 1 - s.smart.mean() / s.plug_in.mean())
+kg_ci = block_ci(ev, lambda s: ((s.plug_in - s.smart) * kwh).mean() * 365 / 1000)
 F["ev"] = (
     f"A 7 kWh overnight EV charge started on plug-in at 18:00 averaged **{plug_in.mean():.0f}** "
     f"gCO₂/kWh; the cleanest 3-hour window before 07:00 averaged **{smart.mean():.0f}** "
-    f"(**{1 - smart.mean() / plug_in.mean():.0%} less**). That is **{saved_kg:.0f} kg CO₂ per car "
-    f"per year**, or **~{saved_kg * n_evs / 1000:,.0f} tonnes** across 1 million smart-charging "
+    f"(**{1 - smart.mean() / plug_in.mean():.0%} less**, {ci(*ev_ci)}). That is **{saved_kg:.0f} kg "
+    f"CO₂ per car per year** ({ci(*kg_ci, '.0f')} kg), or **~{saved_kg * n_evs / 1000:,.0f} tonnes** across 1 million smart-charging "
     f"EVs, at zero cost to the driver ({len(nights)} complete nights analysed)."
 )
 
@@ -261,6 +324,11 @@ report = f"""# Findings
 
 _Generated by `analysis/findings.py` from the dbt marts; every number is computed, none typed.
 Times are UK local time. "Last 12 months" = the 365 days to the latest loaded half-hour._
+
+**How sure are these numbers?** Each headline effect has a 95% confidence interval from a block
+bootstrap: whole weeks are resampled with replacement (1,000 times; 500 for the regression), so
+multi-day weather spells stay together and the intervals aren't falsely narrow. An interval that
+doesn't include zero means the effect is very unlikely to be chance.
 
 ## 1. The grid has decarbonised fast
 {F["trend"]}

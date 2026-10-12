@@ -26,9 +26,11 @@ flowchart LR
 
 ## Key findings
 
-From [`docs/findings.md`](docs/findings.md) (every number computed by `analysis/findings.py`):
+From [`docs/findings.md`](docs/findings.md) (every number computed by `analysis/findings.py`, with
+95% block-bootstrap confidence intervals). For the business version, see the one-page
+**[stakeholder brief](docs/brief.md)** (findings → recommendations → limitations).
 
-- **Carbon intensity fell 48%**, from 248 gCO₂/kWh in 2018 to 129 in 2025. Wind went from 18% to
+- **Carbon intensity fell 48%** (95% CI 44–52%), from 248 gCO₂/kWh in 2018 to 129 in 2025. Wind went from 18% to
   32% of generation, gas from 41% to 28%, and coal disappeared.
 - **Midday is now the cleanest time of day from spring to autumn** (solar). Evenings are dirtiest
   all year, and electricity at 03:00 is 26% cleaner than at 18:00.
@@ -36,7 +38,7 @@ From [`docs/findings.md`](docs/findings.md) (every number computed by `analysis/
   intensity (r = −0.55).
 - **A 33× regional gap:** South Scotland averaged 8 gCO₂/kWh over the last year, South Wales 252.
 - **Smart EV charging** (cleanest 3 h overnight instead of plugging in at 18:00) cuts emissions by
-  29%, about 113 kg CO₂ per car per year.
+  29% (95% CI 26–32%), about 113 kg CO₂ per car per year.
 
 ![When is GB electricity cleanest?](docs/img/time_of_day_heatmap.png)
 
