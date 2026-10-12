@@ -177,7 +177,7 @@ def main() -> None:
             group by 1 order by g
         """)
         fig = px.bar(reg, x="g", y="region", orientation="h", color_discrete_sequence=[BLUE],
-                     labels=dict(g="gCO₂/kWh", region=""))  # fmt: skip
+                     text_auto=".0f", labels=dict(g="gCO₂/kWh", region=""))  # fmt: skip
         fig.update_layout(title="Average forecast intensity by region, last 30 days",
                           yaxis=dict(autorange="reversed"))  # fmt: skip
         st.plotly_chart(fig, width="stretch")
