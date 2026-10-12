@@ -180,6 +180,8 @@ def main() -> None:
                      text_auto=".0f", labels=dict(g="gCO₂/kWh", region=""))  # fmt: skip
         fig.update_layout(title="Average forecast intensity by region, last 30 days",
                           yaxis=dict(autorange="reversed"))  # fmt: skip
+        # outside: plotly hides labels on zero-width bars (North Scotland is ~0)
+        fig.update_traces(textposition="outside", textangle=0, cliponaxis=False)
         st.plotly_chart(fig, width="stretch")
 
     with accuracy_tab:
