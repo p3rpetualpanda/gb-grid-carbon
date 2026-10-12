@@ -5,18 +5,39 @@
 > **When is the cleanest time to use electricity in Great Britain, what drives it, and can we
 > predict it?**
 
-An automated pipeline that collects half-hourly GB grid carbon intensity, generation mix and
-weather data, models it with dbt, forecasts the next 48 hours, and serves a live dashboard.
-It runs entirely on free tiers.
+An automated data pipeline for half-hourly GB grid carbon intensity, generation mix and weather.
+**Working today:** validated extraction from two public APIs, idempotent loading into DuckDB, and
+a full backfill since 2017 (~2.3M rows). **In progress:** dbt models, a scheduled pipeline, a 48h
+forecast benchmarked against the official one, and a live dashboard (see [Status](#status)).
+Everything runs on free tiers.
 
+```mermaid
+flowchart LR
+  A[Carbon Intensity API] --> E[Python extractors<br/>validate · retry · chunk]
+  B[Open-Meteo weather] --> E
+  E -->|idempotent upserts| R[(DuckDB / MotherDuck<br/>raw + meta)]
+  R -.-> D[dbt models + tests]
+  D -.-> F[48h forecast]
+  D -.-> S[Streamlit dashboard]
+  G[GitHub Actions] -.->|every 3h| E
 ```
-Carbon Intensity API ─┐
-                      ├─► Python extractors ─► DuckDB / MotherDuck (raw) ─► dbt (staging → marts)
-Open-Meteo weather ───┘    (validate, retry,      idempotent upserts          + data tests
-                            chunk, upsert)              │                          │
-                                                        ▼                          ▼
-                                           GitHub Actions (every 3h)   48h forecast ─► Streamlit
-```
+<sub>Solid lines are built; dotted lines are planned.</sub>
+
+## Highlights so far
+
+Found by running against the real APIs, not by unit tests (full write-up in
+[`docs/dev_log.md`](docs/dev_log.md)):
+
+- **Silent data loss found by a data-quality check.** After the backfill, a gap query against a
+  complete half-hour time spine showed 10.4% of generation-mix periods missing, including *every*
+  January 2021–2024. The API returns HTTP 200 but silently drops everything after 31 December when
+  a request spans New Year. Splitting requests at 1 January cut missing data to **0.29%**.
+- **An off-by-30-minutes API limit.** "Max 31 days per request" also rejects *exactly* 31 days,
+  because the API adds the half-hour ending at the start time. Fixed with whole-day windows under
+  the limit, plus a regression test that keeps every request inside it.
+- **Rate limiting handled by design.** Open-Meteo's per-minute quota stopped the weather
+  backfill. The retry backoff was lengthened, and the backfill resumed from the failed window
+  because every loaded window is logged.
 
 ## Status
 
