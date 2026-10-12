@@ -19,7 +19,14 @@ from gridcarbon.load import connect  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 BLUE, ORANGE, AQUA, YELLOW = "#2a78d6", "#eb6834", "#1baf7a", "#eda100"
-INK, INK2, MUTED, GRID, AXIS, SURFACE = "#0b0b0b", "#52514e", "#898781", "#e1e0d9", "#c3c2b7", "#fcfcfb"
+INK, INK2, MUTED, GRID, AXIS, SURFACE = (
+    "#0b0b0b",
+    "#52514e",
+    "#898781",
+    "#e1e0d9",
+    "#c3c2b7",
+    "#fcfcfb",
+)
 
 con = connect(Settings(db_target="local"))
 grid, wx = fc.load_history(con)
@@ -57,6 +64,7 @@ fig.savefig(ROOT / "docs" / "img" / "backtest_mae_by_lead.png", facecolor=SURFAC
 model = fc.fit(fc.training_rows(grid, wx, hols, preds["issued_at"].max()))
 gain = pd.Series(model.booster_.feature_importance("gain"), index=fc.FEATURES)
 gain = (gain / gain.sum()).sort_values(ascending=False)
+
 
 def md(df: pd.DataFrame) -> str:
     """Markdown table without the optional `tabulate` dependency."""
