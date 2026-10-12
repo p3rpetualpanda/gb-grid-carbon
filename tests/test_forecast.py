@@ -49,6 +49,14 @@ def test_lag_day_is_the_most_recent_known_same_slot():
     assert rows.loc[96, "lag_day"] == rows.loc[96, "y"] - 144
 
 
+def test_blend_trusts_last_actual_at_lead_1_and_model_far_out():
+    rows = pd.DataFrame({"lead": [1, 96, 1], "last_actual": [88.0, 88.0, np.nan]})
+    out = fc.blend(rows, [170.0, 170.0, 170.0])
+    assert out[0] == 88  # lead 1: the last known actual
+    assert out[1] == pytest.approx(170, abs=0.01)  # 48 h out: the model
+    assert out[2] == 170  # no known actual: the model
+
+
 def test_training_issues_cover_every_half_hour_of_the_day():
     # Regression: a fixed 6 h issue grid never trained on live issue times like 13:30.
     issues = fc.issue_times(START, START + pd.Timedelta(days=30))

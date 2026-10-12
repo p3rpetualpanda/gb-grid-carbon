@@ -22,7 +22,10 @@ ACTUAL_LAG = pd.Timedelta(hours=1)  # actuals publish late: never use the last h
 # half-hour of the day. Live runs issue at any half-hour; a fixed 6 h grid left (lead, slot)
 # combinations unseen and skewed live forecasts.
 ISSUE_EVERY = "390min"
-MODEL_VERSION = "lgbm-direct-v1"
+MODEL_VERSION = "lgbm-direct-v2"
+# Short leads lean on the last known actual: weight exp(-(lead-1)/6). Decay chosen on the first
+# 6 backtest months, checked on the last 6 (0-2 h MAE 19.1 -> 17.0; overall unchanged).
+PERSISTENCE_DECAY = 6
 FEATURES = [
     "lead", "halfhour_slot", "iso_weekday", "month", "is_holiday",
     "last_actual", "mean_24h", "lag_day", "lag_week",
@@ -114,6 +117,13 @@ def fit(rows: pd.DataFrame):
     return model.fit(rows[FEATURES], rows["y"])
 
 
+def blend(rows: pd.DataFrame, model_pred) -> np.ndarray:
+    """Model forecast, pulled towards the last known actual at short leads (when there is one)."""
+    last = rows["last_actual"].to_numpy(dtype=float)
+    w = np.where(np.isnan(last), 0.0, np.exp(-(rows["lead"].to_numpy() - 1) / PERSISTENCE_DECAY))
+    return w * np.nan_to_num(last) + (1 - w) * np.asarray(model_pred)
+
+
 def training_rows(grid: pd.DataFrame, wx: pd.DataFrame, hols: set, until) -> pd.DataFrame:
     """Rows whose targets all lie before `until` (issues stop 48 h earlier)."""
     start = max(grid.index.min() + pd.Timedelta(days=8), wx.index.min())
@@ -129,7 +139,7 @@ def backtest(grid: pd.DataFrame, wx: pd.DataFrame, hols: set, months: int = 12) 
     for fold_start, fold_end in zip(folds[:-1], folds[1:], strict=True):
         model = fit(training_rows(grid, wx, hols, fold_start))
         test = features(grid, wx, issue_times(fold_start, fold_end - STEP), hols)
-        out.append(test.assign(model=model.predict(test[FEATURES])))
+        out.append(test.assign(model=blend(test, model.predict(test[FEATURES]))))
     return pd.concat(out, ignore_index=True).dropna(subset=["y"])
 
 
@@ -162,7 +172,7 @@ def predict_live(con, now: datetime) -> pd.DataFrame:
             "issued_at": rows["issued_at"],
             "period_from": rows["period_from"],
             "lead": rows["lead"],
-            "yhat": model.predict(rows[FEATURES]),
+            "yhat": blend(rows, model.predict(rows[FEATURES])),
             "model_version": MODEL_VERSION,
         }
     )
