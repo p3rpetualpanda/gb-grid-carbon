@@ -35,6 +35,10 @@ Found by running against the real APIs, not by unit tests (full write-up in
 - **An off-by-30-minutes API limit.** "Max 31 days per request" also rejects *exactly* 31 days,
   because the API adds the half-hour ending at the start time. Fixed with whole-day windows under
   the limit, plus a regression test that keeps every request inside it.
+- **A dbt test caught impossible upstream forecasts.** A physical-range test (0–1000 gCO₂/kWh)
+  flagged 16 half-hours in 2018–19 where NESO's published forecast was up to 13,579, about 50×
+  reality, while actuals were normal. Staging nulls and flags them (raw keeps the original), so
+  they can't distort forecast-accuracy analysis.
 - **Rate limiting handled by design.** Open-Meteo's per-minute quota stopped the weather
   backfill. The retry backoff was lengthened, and the backfill resumed from the failed window
   because every loaded window is logged.
@@ -47,8 +51,8 @@ Found by running against the real APIs, not by unit tests (full write-up in
 | 2 | Live API exploration → `docs/data_dictionary.md` | ✅ Done |
 | 3 | Extraction + idempotent loading + backfill (48 offline tests; ~2.3M rows since 2017) | ✅ Done |
 | 4 | MotherDuck cloud warehouse (same code, `DB_TARGET=motherduck`) | ✅ Done |
-| 5 | dbt models + data tests + docs site | ⏳ |
-| 6 | Scheduled GitHub Actions pipeline | ⏳ |
+| 5 | dbt models (staging → marts) + 37 data tests | ✅ Done |
+| 6 | Scheduled GitHub Actions pipeline (every 3h) + dbt docs site | ✅ Built |
 | 7 | Analysis & findings | ⏳ |
 | 8 | 48h forecast vs NESO benchmark | ⏳ |
 | 9 | Live Streamlit dashboard | ⏳ |
@@ -90,6 +94,11 @@ token in `.env` and run any command with `DB_TARGET=motherduck` (PowerShell:
 | `gridcarbon backfill [-d DATASET]... [--start] [--end]` | Load history window by window; re-run resumes where it stopped |
 | `gridcarbon incremental` | Re-fetch from (latest row − 3 days) to now for every dataset, and snapshot the live forecasts |
 | `gridcarbon status` | Row counts, time coverage and the latest runs |
+
+dbt (from the `dbt/` folder): `dbt build --profiles-dir .` builds and tests every model against
+the local warehouse; set `DBT_TARGET=prod` (plus `MOTHERDUCK_TOKEN`) for MotherDuck.
+Main table: `marts.fct_grid_halfhourly`, one row per half-hour on a complete time spine, with
+intensity, generation mix, weather and UK local-time calendar.
 
 Datasets: `intensity`, `generation`, `regional` (opt-in for backfill: ~800 MB of JSON),
 `weather_observed`, `weather_historical_forecast`.

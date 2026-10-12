@@ -61,3 +61,20 @@ ours) against actuals later.
 - History was loaded by re-running the resumable backfill against MotherDuck (zero new code)
   rather than writing a copy job; then row counts were compared with the local warehouse.
 - The token lives only in the gitignored `.env` (locally) and, from Phase 6, in GitHub Secrets.
+
+## 2026-10-12: Phases 5–6: dbt + scheduled pipeline
+
+- **Layers:** `staging` (rename + units, views) → `intermediate` (time spine, UK calendar, wide
+  mix, GB weather) → `marts` (tables). UTC everywhere; `int_calendar` is the only place that
+  converts to Europe/London (verified: clock-change days have 46 and 50 half-hours).
+- **Kept small on purpose:** no dbt packages (custom checks are four singular SQL tests),
+  full-refresh tables instead of incremental (~2M rows rebuild in ~7 s on MotherDuck), and only
+  the marts the analysis/dashboard need. A heatmap aggregate can be queried on the fly.
+- **The physical-range test failed on the first run:** 16 NESO forecasts in 2018–19 are impossible
+  (up to 13,579 gCO₂/kWh vs actuals ~150–300). Raw keeps them; staging nulls them and sets
+  `is_forecast_invalid`. Another defect found by a test, not by eye.
+- **Bank holidays:** gov.uk's feed starts in 2019; Dec 2017 – Dec 2018 were added by hand.
+- **CI** runs `dbt build` on an empty warehouse, so every model and test compiles and runs on each
+  PR without touching production.
+- **Pipeline** (`.github/workflows/pipeline.yml`, every 3 h): incremental load → source freshness
+  (warn 6 h / error 24 h) → `dbt build` → dbt docs published to GitHub Pages.

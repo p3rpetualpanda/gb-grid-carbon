@@ -1,0 +1,14 @@
+version: 2
+
+seeds:
+  - name: uk_bank_holidays
+    description: >
+      England & Wales bank holidays. 2019 onwards from https://www.gov.uk/bank-holidays.json;
+      Dec 2017 – Dec 2018 added by hand (not in the feed, data starts Sept 2017).
+    config:
+      column_types:
+        holiday_date: date
+        holiday_name: varchar
+    columns:
+      - name: holiday_date
+        data_tests: [unique, not_null]

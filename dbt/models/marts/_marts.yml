@@ -1,0 +1,46 @@
+version: 2
+
+models:
+  - name: fct_grid_halfhourly
+    description: >
+      The main analysis table: one row per half-hour (UTC) on a complete time spine, with national
+      intensity, generation mix (wide), GB weather (hourly value applied to both half-hours) and UK
+      local calendar attributes. is_missing flags half-hours the API never returned.
+    columns:
+      - name: period_from
+        data_tests: [unique, not_null]
+      - name: halfhour_slot
+        description: Half-hour of the UK local day, 0 (00:00) to 47 (23:30).
+        data_tests: [not_null]
+      - name: intensity_index
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["very low", "low", "moderate", "high", "very high"]
+
+  - name: dim_region
+    description: Carbon Intensity API regions. 1-14 are DNO licence areas; 15-18 are aggregates.
+    columns:
+      - name: region_id
+        data_tests: [unique, not_null]
+
+  - name: fct_regional_halfhourly
+    description: Regional forecast intensity per half-hour (no actuals are published regionally).
+    columns:
+      - name: region_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_region')
+                field: region_id
+
+  - name: agg_daily
+    description: One row per UK local date with intensity statistics and the greenest half-hour.
+    columns:
+      - name: date_local
+        data_tests: [unique, not_null]
+
+  - name: fct_official_forecast_accuracy
+    description: >
+      NESO forecast snapshots joined to the actuals that later arrived; grows with every
+      pipeline run. Error = forecast - actual.

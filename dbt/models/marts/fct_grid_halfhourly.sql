@@ -1,0 +1,36 @@
+select
+    c.period_from,
+    c.local_ts,
+    c.date_local,
+    c.hour_local,
+    c.halfhour_slot,
+    c.iso_weekday,
+    c.is_weekend,
+    c.is_bank_holiday,
+    c.year,
+    c.month,
+    c.season,
+    i.forecast_gco2_kwh,
+    i.actual_gco2_kwh,
+    i.intensity_index,
+    i.period_from is null as is_missing,
+    m.gas_pct,
+    m.coal_pct,
+    m.nuclear_pct,
+    m.wind_pct,
+    m.solar_pct,
+    m.hydro_pct,
+    m.biomass_pct,
+    m.imports_pct,
+    m.other_pct,
+    m.renewable_pct,
+    m.low_carbon_pct,
+    m.fossil_pct,
+    w.wind_speed_100m_kmh,
+    w.solar_radiation_wm2,
+    w.temperature_c,
+    w.cloud_cover_pct
+from {{ ref('int_calendar') }} as c
+left join {{ ref('stg_intensity_national') }} as i on i.period_from = c.period_from
+left join {{ ref('int_generation_mix_wide') }} as m on m.period_from = c.period_from
+left join {{ ref('int_weather_gb') }} as w on w.hour_utc = date_trunc('hour', c.period_from)

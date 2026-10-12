@@ -1,0 +1,17 @@
+# dev  = local DuckDB file (run dbt from this dbt/ folder)
+# prod = MotherDuck; the extension reads the token from the MOTHERDUCK_TOKEN env var
+gridcarbon:
+  target: "{{ env_var('DBT_TARGET', 'dev') }}"
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('DBT_DUCKDB_PATH', '../data/gridcarbon.duckdb') }}"
+      threads: 4
+      settings:
+        TimeZone: UTC
+    prod:
+      type: duckdb
+      path: "md:gridcarbon"
+      threads: 4
+      settings:
+        TimeZone: UTC

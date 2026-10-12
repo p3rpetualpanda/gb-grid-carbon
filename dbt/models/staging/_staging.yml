@@ -1,0 +1,37 @@
+version: 2
+
+models:
+  - name: stg_intensity_national
+    description: National intensity, renamed with units. One row per half-hour (UTC).
+    columns:
+      - name: period_from
+        data_tests: [unique, not_null]
+      - name: intensity_index
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["very low", "low", "moderate", "high", "very high"]
+
+  - name: stg_generation_mix
+    description: National generation mix, long format (period_from, fuel).
+    columns:
+      - name: period_from
+        data_tests: [not_null]
+      - name: fuel
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [biomass, coal, imports, gas, nuclear, other, hydro, solar, wind]
+
+  - name: stg_intensity_regional
+    description: Regional forecast intensity. is_aggregate marks England/Scotland/Wales/GB (15-18).
+    columns:
+      - name: region_id
+        data_tests: [not_null]
+
+  - name: stg_official_forecast
+    description: NESO forecast snapshots with lead time in hours.
+
+  - name: stg_weather_observed
+    description: Hourly observed weather per point, renamed with units.

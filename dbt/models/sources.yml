@@ -1,0 +1,26 @@
+version: 2
+
+sources:
+  - name: raw
+    description: Raw API data loaded by the Python pipeline (src/gridcarbon). See docs/data_dictionary.md.
+    schema: raw
+    config:
+      loaded_at_field: _ingested_at
+      freshness:
+        warn_after: {count: 6, period: hour}
+        error_after: {count: 24, period: hour}
+    tables:
+      - name: intensity_national
+        description: National half-hourly forecast + actual carbon intensity (gCO2/kWh).
+      - name: generation_mix
+        description: National generation mix, one row per half-hour per fuel.
+      - name: intensity_regional
+        description: Regional forecast intensity; regions 15-18 are aggregates.
+      - name: official_forecast_snapshots
+        description: NESO 48h forecast as captured at each pipeline run (issued_at).
+      - name: weather_observed
+        description: Hourly observed weather at fixed GB points (Open-Meteo archive).
+      - name: weather_historical_forecast
+        description: Hourly weather forecasts as issued (for leakage-safe model training).
+      - name: weather_forecast_snapshots
+        description: Live weather forecast captured at each pipeline run.

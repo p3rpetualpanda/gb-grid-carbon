@@ -1,0 +1,70 @@
+name: pipeline
+
+# Every 3 hours: extract + load (incremental, with forecast snapshots) into MotherDuck,
+# check source freshness, rebuild and test the dbt models, and publish dbt docs to Pages.
+# GitHub disables schedules in public repos after 60 days without commits: re-enable from
+# the Actions tab if that happens.
+on:
+  schedule:
+    - cron: "17 */3 * * *"  # :17 avoids the busy top of the hour; start times can lag
+  workflow_dispatch:
+
+concurrency:
+  group: pipeline
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DB_TARGET: motherduck
+      DBT_TARGET: prod
+      MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: pip install -e ".[dbt]"
+
+      - name: Extract + load
+        run: gridcarbon incremental
+
+      - name: Source freshness
+        working-directory: dbt
+        run: dbt source freshness --profiles-dir .
+
+      - name: Transform + test
+        working-directory: dbt
+        run: dbt build --profiles-dir .
+
+      - name: Build docs site
+        working-directory: dbt
+        run: |
+          dbt docs generate --profiles-dir .
+          mkdir -p ../site && cp target/index.html target/manifest.json target/catalog.json ../site/
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  docs:
+    needs: run
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

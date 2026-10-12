@@ -1,0 +1,28 @@
+name: gridcarbon
+version: "0.1.0"
+config-version: 2
+profile: gridcarbon
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+clean-targets: ["target", "dbt_packages"]
+
+# shortcut: marts are full-refresh tables (~2M rows rebuild in seconds on DuckDB);
+# switch the big facts to incremental if a rebuild ever takes more than a minute.
+models:
+  gridcarbon:
+    staging:
+      +schema: staging
+      +materialized: view
+    intermediate:
+      +schema: staging
+      +materialized: view
+    marts:
+      +schema: marts
+      +materialized: table
+
+seeds:
+  gridcarbon:
+    +schema: ref
