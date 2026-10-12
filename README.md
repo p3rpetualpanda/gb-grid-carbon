@@ -1,6 +1,8 @@
 # GB Grid Carbon Tracker
 
 ![CI](https://github.com/p3rpetualpanda/gb-grid-carbon/actions/workflows/ci.yml/badge.svg)
+![pipeline](https://github.com/p3rpetualpanda/gb-grid-carbon/actions/workflows/pipeline.yml/badge.svg)
+· [dbt docs & lineage](https://p3rpetualpanda.github.io/gb-grid-carbon/)
 
 > **When is the cleanest time to use electricity in Great Britain, what drives it, and can we
 > predict it?**
@@ -52,7 +54,7 @@ Found by running against the real APIs, not by unit tests (full write-up in
 | 3 | Extraction + idempotent loading + backfill (48 offline tests; ~2.3M rows since 2017) | ✅ Done |
 | 4 | MotherDuck cloud warehouse (same code, `DB_TARGET=motherduck`) | ✅ Done |
 | 5 | dbt models (staging → marts) + 37 data tests | ✅ Done |
-| 6 | Scheduled GitHub Actions pipeline (every 3h) + dbt docs site | ✅ Built |
+| 6 | Scheduled GitHub Actions pipeline (every 3h) + dbt docs site | ✅ Live |
 | 7 | Analysis & findings | ⏳ |
 | 8 | 48h forecast vs NESO benchmark | ⏳ |
 | 9 | Live Streamlit dashboard | ⏳ |
