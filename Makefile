@@ -18,7 +18,7 @@ help:
 	@echo "fixtures     - re-record API responses used by the tests"
 
 setup:
-	$(PY) -m pip install -e ".[dev]"
+	$(PY) -m pip install -e ".[dev,dbt,ml,analysis]"
 	pre-commit install
 
 lint:

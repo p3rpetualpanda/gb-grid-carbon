@@ -25,7 +25,7 @@ dependencies = [
 dev = [
     "pytest>=8.2",
     "responses>=0.25",
-    "ruff>=0.6",
+    "ruff==0.17.0",  # pinned: formatter output must match pre-commit and CI
     "pre-commit>=3.7",
 ]
 # Added in later phases:

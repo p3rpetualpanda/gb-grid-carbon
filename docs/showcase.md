@@ -7,7 +7,7 @@ Material for the CV, LinkedIn and interviews. Every number comes from `docs/find
 
 - Built an automated ELT pipeline (Python, GitHub Actions, dbt, DuckDB/MotherDuck) that loads
   half-hourly GB grid carbon-intensity, generation-mix and weather data every 3 hours (2.6M+ rows
-  since 2017), with idempotent upserts, resumable backfills and 39 dbt data tests.
+  since 2017), with idempotent upserts, resumable backfills and 25 dbt data tests.
 - Found and fixed silent data loss through data-quality checks: an API that drops all data after
   31 December in year-spanning requests (missing data 10.4% → 0.29%), and 16 impossible upstream
   forecasts caught by a dbt range test.

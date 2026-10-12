@@ -40,7 +40,7 @@ models:
       - name: date_local
         data_tests: [unique, not_null]
 
-  - name: fct_official_forecast_accuracy
+  - name: fct_model_vs_official
     description: >
-      NESO forecast snapshots joined to the actuals that later arrived; grows with every
-      pipeline run. Error = forecast - actual.
+      Live track record: our forecast and NESO's, issued in the same pipeline run, with absolute
+      errors once the actual is published. Grows with every run.

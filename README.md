@@ -17,7 +17,7 @@ flowchart LR
   A[Carbon Intensity API] --> E[Python extractors<br/>validate · retry · chunk]
   B[Open-Meteo weather] --> E
   E -->|idempotent upserts| R[(MotherDuck<br/>raw + meta)]
-  R --> D[dbt models<br/>+ 39 tests]
+  R --> D[dbt models<br/>+ 25 data tests]
   D --> F[48h LightGBM forecast]
   F --> D
   D --> S[Streamlit dashboard]
@@ -85,7 +85,7 @@ Found by running against the real APIs, not by unit tests (full write-up in
 | 2 | Live API exploration → `docs/data_dictionary.md` | ✅ Done |
 | 3 | Extraction + idempotent loading + backfill (48 offline tests; ~2.3M rows since 2017) | ✅ Done |
 | 4 | MotherDuck cloud warehouse (same code, `DB_TARGET=motherduck`) | ✅ Done |
-| 5 | dbt models (staging → marts) + 37 data tests | ✅ Done |
+| 5 | dbt models (staging → marts) + 25 data tests | ✅ Done |
 | 6 | Scheduled GitHub Actions pipeline (every 3h) + dbt docs site | ✅ Live |
 | 7 | Analysis & findings → [`docs/findings.md`](docs/findings.md) | ✅ Done |
 | 8 | 48h forecast, backtest, live scoring vs NESO → [`docs/backtest.md`](docs/backtest.md) | ✅ Live |

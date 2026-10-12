@@ -55,8 +55,8 @@ def holidays() -> set:
         return {datetime.fromisoformat(r["holiday_date"]).date() for r in csv.DictReader(f)}
 
 
-def load_history(con) -> tuple[pd.Series, pd.DataFrame]:
-    """Actuals on the complete half-hour spine, NESO's published forecast, historical weather."""
+def load_history(con) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """(grid with actuals `y` + NESO forecast `neso` on the half-hour spine, hourly weather)."""
     grid = (
         con.sql(
             "select period_from, actual_gco2_kwh as y, forecast_gco2_kwh as neso "
@@ -132,7 +132,7 @@ def training_rows(grid: pd.DataFrame, wx: pd.DataFrame, hols: set, until) -> pd.
 
 def backtest(grid: pd.DataFrame, wx: pd.DataFrame, hols: set, months: int = 12) -> pd.DataFrame:
     """Rolling-origin backtest: for each of the last `months` months, train only on targets
-    before the month starts, then forecast every 6-hourly issue inside it."""
+    before the month starts, then forecast every issue (each 6.5 h) inside it."""
     last = grid["y"].dropna().index.max()
     folds = pd.date_range(end=last.floor("D"), periods=months + 1, freq="MS")
     out = []

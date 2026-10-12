@@ -78,7 +78,7 @@ def test_backtest_trains_only_on_the_past(monkeypatch):
     monkeypatch.setattr(fc, "fit", fake_fit)
     grid = spine(120)
     preds = fc.backtest(grid, hourly_weather(120), set(), months=2)
-    fold_starts = sorted(preds.groupby(preds["issued_at"].dt.to_period("M"))["issued_at"].min())
+    fold_starts = sorted(preds.groupby(preds["issued_at"].dt.strftime("%Y-%m"))["issued_at"].min())
     for trained_until, fold_start in zip(seen, fold_starts, strict=True):
         assert trained_until < fold_start
 

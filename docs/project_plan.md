@@ -1,5 +1,9 @@
 # Project 4: GB Grid Carbon Tracker. A complete plan
 
+> **This is the original plan, kept for reference.** The build deliberately cut some of it
+> (incremental dbt models, a separate retrain workflow, Prophet/SHAP, a regional map). The README
+> describes what was actually built, and `docs/dev_log.md` explains each decision.
+
 > An automated pipeline that collects Great Britain electricity carbon-intensity, generation-mix and weather data every few hours. It cleans the data with dbt, forecasts the next 48 hours, and serves a live public dashboard. It costs £0 to run.
 
 ---

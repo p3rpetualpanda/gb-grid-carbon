@@ -14,9 +14,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: read  # the job holding MOTHERDUCK_TOKEN gets nothing more
 
 jobs:
   run:
@@ -69,6 +67,9 @@ jobs:
   docs:
     needs: run
     runs-on: ubuntu-latest
+    permissions:  # only the deploy job may publish to Pages
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}

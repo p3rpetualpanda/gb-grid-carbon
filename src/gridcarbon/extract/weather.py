@@ -76,7 +76,7 @@ def parse_locations(payload, points: tuple[WeatherPoint, ...]) -> list[dict]:
                 "longitude": point.longitude,
             }
             for var in HOURLY_VARS:
-                row[var] = loc.hourly.get(var, [None] * (i + 1))[i]
+                row[var] = loc.hourly[var][i] if var in loc.hourly else None
             rows.append(row)
     return rows
 
