@@ -51,3 +51,13 @@ Upsert-by-key only replaces rows the batch actually contains. Verified live: run
 **Forecast snapshots are append-only by `issued_at`.** Past forecasts can't be re-downloaded,
 so the pipeline must capture them as it runs. This is what lets us score NESO's forecast (and
 ours) against actuals later.
+
+## 2026-10-12: Phase 4: MotherDuck
+
+- Same code, one env var: `DB_TARGET=motherduck` makes `connect()` use hosted DuckDB; no SQL
+  changes were needed.
+- **Connecting to a database that doesn't exist (`md:gridcarbon`) hangs instead of erroring.**
+  `connect()` now connects to `md:`, runs `CREATE DATABASE IF NOT EXISTS`, then `USE`.
+- History was loaded by re-running the resumable backfill against MotherDuck (zero new code)
+  rather than writing a copy job; then row counts were compared with the local warehouse.
+- The token lives only in the gitignored `.env` (locally) and, from Phase 6, in GitHub Secrets.

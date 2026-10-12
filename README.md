@@ -46,7 +46,7 @@ Found by running against the real APIs, not by unit tests (full write-up in
 | 1 | Scaffold, tooling, CI | ✅ Done |
 | 2 | Live API exploration → `docs/data_dictionary.md` | ✅ Done |
 | 3 | Extraction + idempotent loading + backfill (48 offline tests; ~2.3M rows since 2017) | ✅ Done |
-| 4 | MotherDuck warehouse | ⏳ Next |
+| 4 | MotherDuck cloud warehouse (same code, `DB_TARGET=motherduck`) | ✅ Done |
 | 5 | dbt models + data tests + docs site | ⏳ |
 | 6 | Scheduled GitHub Actions pipeline | ⏳ |
 | 7 | Analysis & findings | ⏳ |
@@ -78,6 +78,9 @@ make setup && make init-db && make incremental && make status && make check
 ```
 
 Configuration is via environment variables or a `.env` file (copy `.env.example`).
+To use the cloud warehouse instead of the local file, put a [MotherDuck](https://motherduck.com)
+token in `.env` and run any command with `DB_TARGET=motherduck` (PowerShell:
+`$env:DB_TARGET="motherduck"`). The database is created on first connect.
 
 ## Commands
 

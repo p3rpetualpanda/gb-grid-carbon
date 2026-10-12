@@ -64,9 +64,11 @@ def connect(settings: Settings) -> duckdb.DuckDBPyConnection:
         if settings.motherduck_token is None:
             raise RuntimeError("DB_TARGET=motherduck but MOTHERDUCK_TOKEN is not set")
         con = duckdb.connect(
-            f"md:{settings.motherduck_database}",
-            config={"motherduck_token": settings.motherduck_token.get_secret_value()},
+            "md:", config={"motherduck_token": settings.motherduck_token.get_secret_value()}
         )
+        # Connecting straight to a missing md:<db> hangs instead of erroring, so create it first.
+        con.execute(f"CREATE DATABASE IF NOT EXISTS {settings.motherduck_database}")
+        con.execute(f"USE {settings.motherduck_database}")
     else:
         settings.duckdb_path.parent.mkdir(parents=True, exist_ok=True)
         con = duckdb.connect(str(settings.duckdb_path))
