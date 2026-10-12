@@ -26,6 +26,9 @@ dbt/dbt_packages/
 dbt/logs/
 dbt/.user.yml
 
+# Context Keeper (/ck:save) local session notes
+memory/
+
 # Editors / OS
 .idea/
 .vscode/
