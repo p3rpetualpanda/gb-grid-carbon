@@ -44,8 +44,11 @@ def main() -> None:
             token = os.environ.get("MOTHERDUCK_TOKEN")
         if token:
             con = duckdb.connect("md:gridcarbon", config={"motherduck_token": token})
-        else:
+        elif LOCAL_DB.exists():
             con = duckdb.connect(str(LOCAL_DB), read_only=True)
+        else:
+            st.error("No data: set the `MOTHERDUCK_TOKEN` secret (Manage app → Settings → Secrets)")
+            st.stop()
         con.execute("SET TimeZone = 'UTC'")
         return con
 
@@ -122,7 +125,7 @@ def main() -> None:
             title="Carbon intensity: last 36 h and next 48 h (UK time)",
             yaxis_title="gCO₂/kWh",
             hovermode="x unified",
-            legend_orientation="h",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         )
         st.plotly_chart(fig, width="stretch")
 

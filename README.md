@@ -2,7 +2,7 @@
 
 ![CI](https://github.com/p3rpetualpanda/gb-grid-carbon/actions/workflows/ci.yml/badge.svg)
 ![pipeline](https://github.com/p3rpetualpanda/gb-grid-carbon/actions/workflows/pipeline.yml/badge.svg)
-· [dbt docs & lineage](https://p3rpetualpanda.github.io/gb-grid-carbon/)
+· **[Live dashboard](https://gb-grid-carbon-b8k4zy3yzvfzqzxewxzdsk.streamlit.app/)** · [dbt docs & lineage](https://p3rpetualpanda.github.io/gb-grid-carbon/)
 
 > **When is the cleanest time to use electricity in Great Britain, what drives it, and can we
 > predict it?**
@@ -89,7 +89,7 @@ Found by running against the real APIs, not by unit tests (full write-up in
 | 6 | Scheduled GitHub Actions pipeline (every 3h) + dbt docs site | ✅ Live |
 | 7 | Analysis & findings → [`docs/findings.md`](docs/findings.md) | ✅ Done |
 | 8 | 48h forecast, backtest, live scoring vs NESO → [`docs/backtest.md`](docs/backtest.md) | ✅ Live |
-| 9 | Streamlit dashboard (`app/streamlit_app.py`) | ✅ Built (deploy pending) |
+| 9 | Streamlit dashboard (`app/streamlit_app.py`) → [live](https://gb-grid-carbon-b8k4zy3yzvfzqzxewxzdsk.streamlit.app/) | ✅ Live |
 
 Full plan: [`docs/project_plan.md`](docs/project_plan.md). Decisions and surprises:
 [`docs/dev_log.md`](docs/dev_log.md). CV bullets and interview notes:
