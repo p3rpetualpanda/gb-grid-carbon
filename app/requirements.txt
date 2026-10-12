@@ -1,0 +1,6 @@
+# Streamlit Community Cloud installs these for app/streamlit_app.py
+streamlit>=1.46
+plotly>=5.22
+duckdb==1.5.6  # a version MotherDuck supports; keep in step with the pipeline
+pandas>=2.2
+pytz

@@ -22,12 +22,12 @@ setup:
 	pre-commit install
 
 lint:
-	$(PY) -m ruff check src tests scripts
-	$(PY) -m ruff format --check src tests scripts
+	$(PY) -m ruff check src tests scripts analysis app
+	$(PY) -m ruff format --check src tests scripts analysis app
 
 format:
-	$(PY) -m ruff check src tests scripts --fix
-	$(PY) -m ruff format src tests scripts
+	$(PY) -m ruff check src tests scripts analysis app --fix
+	$(PY) -m ruff format src tests scripts analysis app
 
 test:
 	$(PY) -m pytest

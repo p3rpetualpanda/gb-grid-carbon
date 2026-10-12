@@ -36,8 +36,8 @@ jobs:
 
       - name: Lint
         run: |
-          python -m ruff check src tests scripts
-          python -m ruff format --check src tests scripts
+          python -m ruff check src tests scripts analysis app
+          python -m ruff format --check src tests scripts analysis app
 
       - name: Test
         run: python -m pytest

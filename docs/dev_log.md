@@ -78,3 +78,16 @@ ours) against actuals later.
   PR without touching production.
 - **Pipeline** (`.github/workflows/pipeline.yml`, every 3 h): incremental load → source freshness
   (warn 6 h / error 24 h) → `dbt build` → dbt docs published to GitHub Pages.
+
+## 2026-10-12: Phases 7-9: findings, forecast, dashboard
+
+- **Findings as a script, not a notebook:** `analysis/findings.py` computes every number and writes
+  `docs/findings.md` + charts, so the write-up can never drift from the data.
+- **Forecast:** direct multi-horizon LightGBM, retrained each pipeline run (seconds; no model
+  artifact to store). Backtest MAE 26.8 vs 44.3 naive.
+- **Live sanity check found a real problem:** first live forecast ~170 at 13:30 vs last actual 88
+  (truth 86). Fixed a train/serve skew (6 h issue grid -> 6.5 h, coprime with 48 half-hours) and
+  added a persistence blend for short leads, tuned on the first half of the backtest and checked
+  on the second (0-2 h MAE 19.1 -> 17.0). Persistence is now also a reported baseline.
+- **Dashboard:** one Streamlit file, marts only, MotherDuck via secret or local file fallback.
+  Found a pandas name clash (`df.rolling` column vs method) only by rendering it.
