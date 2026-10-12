@@ -97,11 +97,10 @@ def main() -> None:
         """).iloc[0]
         start, mean = greenest_window(forecast, 3)
         c1, c2, c3 = st.columns(3)
+        # Index goes in the label: metric's delta slot always draws an up/down arrow.
         c1.metric(
-            f"Latest actual ({hhmm(latest.period_from)})",
+            f"Latest actual ({hhmm(latest.period_from)}) · {latest.intensity_index}",
             f"{latest.actual_gco2_kwh} gCO₂/kWh",
-            latest.intensity_index,
-            delta_color="off",
         )
         c2.metric("Cleanest 3 h in the next 48 h starts", hhmm(start))
         c3.metric("Forecast intensity in that window", f"{mean:.0f} gCO₂/kWh")
