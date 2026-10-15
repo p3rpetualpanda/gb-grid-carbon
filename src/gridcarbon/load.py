@@ -98,29 +98,43 @@ def upsert(
     key_cols: Iterable[str],
     run_id: str,
 ) -> int:
-    """Replace rows sharing a natural key with the batch. Returns rows written."""
+    """Replace rows sharing a natural key with the batch. Returns rows written.
+
+    Rows identical to what is stored are skipped, so `_ingested_at`/`_run_id` record when the
+    current values first arrived (e.g. when an actual was published), not the last re-fetch.
+    """
     if table not in DDL:
         raise ValueError(f"unknown table {table}")
     key_cols = list(key_cols)
     if df.empty:
         log.info("upsert %s: empty batch, nothing to do", table)
         return 0
-    batch = df.drop_duplicates(subset=key_cols, keep="last").assign(
-        _ingested_at=utcnow(), _run_id=run_id
-    )
+    batch = df.drop_duplicates(subset=key_cols, keep="last")
     match = " AND ".join(f"t.{c} = b.{c}" for c in key_cols)
+    same = " AND ".join(
+        f"t.{c} IS NOT DISTINCT FROM b.{c}" for c in batch.columns if c not in key_cols
+    )
     con.register("_batch", batch)
     try:
         con.begin()
-        con.execute(f"DELETE FROM {table} AS t USING _batch AS b WHERE {match}")
-        con.execute(f"INSERT INTO {table} BY NAME SELECT * FROM _batch")
+        con.execute(
+            "CREATE OR REPLACE TEMP TABLE _changed AS SELECT * FROM _batch AS b WHERE NOT EXISTS "
+            f"(SELECT 1 FROM {table} AS t WHERE {match} AND {same or 'true'})"
+        )
+        con.execute(f"DELETE FROM {table} AS t USING _changed AS b WHERE {match}")
+        con.execute(
+            f"INSERT INTO {table} BY NAME SELECT *, ? AS _ingested_at, ? AS _run_id FROM _changed",
+            [utcnow(), run_id],
+        )
+        written = con.execute("SELECT count(*) FROM _changed").fetchone()[0]
+        con.execute("DROP TABLE _changed")
         con.commit()
     except Exception:
         con.rollback()
         raise
     finally:
         con.unregister("_batch")
-    return len(batch)
+    return written
 
 
 def max_time(con: duckdb.DuckDBPyConnection, table: str, col: str) -> datetime | None:

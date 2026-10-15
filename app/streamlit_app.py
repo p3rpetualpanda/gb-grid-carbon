@@ -29,6 +29,16 @@ def greenest_window(forecast: pd.Series, hours: float) -> tuple[pd.Timestamp, fl
     return forecast.index[end - slots + 1], float(means.min())
 
 
+NESO_LEADS = 12  # NESO beats our model at 0-6 h (live and backtest), so trust it there
+
+
+def best_forecast(issue: pd.DataFrame) -> pd.Series:
+    """Per half-hour: NESO's forecast for the first 6 h (when it has one), ours after that."""
+    use_neso = (issue["lead"] <= NESO_LEADS) & issue["neso_gco2_kwh"].notna()
+    blended = issue["neso_gco2_kwh"].where(use_neso, issue["model_gco2_kwh"])
+    return blended.set_axis(issue["period_from"]).astype(float)
+
+
 def main() -> None:
     import plotly.express as px
     import plotly.graph_objects as go
@@ -72,11 +82,11 @@ def main() -> None:
     )
 
     latest_issue = q("""
-        select period_from, model_gco2_kwh, neso_gco2_kwh from marts.fct_model_vs_official
+        select period_from, lead, model_gco2_kwh, neso_gco2_kwh from marts.fct_model_vs_official
         where issued_at = (select max(issued_at) from marts.fct_model_vs_official)
         order by period_from
     """)
-    forecast = latest_issue.set_index("period_from")["model_gco2_kwh"]
+    forecast = best_forecast(latest_issue)
 
     now_tab, planner_tab, greenest_tab, trends_tab, regions_tab, accuracy_tab, about_tab = st.tabs(
         [
@@ -112,8 +122,8 @@ def main() -> None:
         fig = go.Figure()
         fig.add_scatter(x=uk(past.period_from), y=past.actual_gco2_kwh, name="Actual",
                         line=dict(color=BLUE, width=2))  # fmt: skip
-        fig.add_scatter(x=uk(latest_issue.period_from), y=latest_issue.model_gco2_kwh,
-                        name="Our forecast", line=dict(color=ORANGE, width=2))  # fmt: skip
+        fig.add_scatter(x=uk(forecast.index), y=forecast, name="Our forecast (NESO's for 0-6 h)",
+                        line=dict(color=ORANGE, width=2))  # fmt: skip
         fig.add_scatter(
             x=uk(latest_issue.period_from),
             y=latest_issue.neso_gco2_kwh,
@@ -138,7 +148,8 @@ def main() -> None:
             f"about **{mean:.0f} gCO₂/kWh**, vs {now_mean:.0f} if you start now "
             f"(**{1 - mean / now_mean:.0%} less CO₂**)."
         )
-        st.caption("Based on our latest 48 h forecast. 7 kWh of EV charging at the cleanest time "
+        st.caption("Based on our latest 48 h forecast (NESO's for the first 6 h). "
+                   "7 kWh of EV charging at the cleanest time "
                    f"emits about {7 * mean / 1000:.1f} kg CO₂.")  # fmt: skip
 
     with greenest_tab:

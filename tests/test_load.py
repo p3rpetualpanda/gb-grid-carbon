@@ -60,6 +60,16 @@ def test_lineage_columns_are_filled(con):
     assert run_id == "run-abc" and ingested is not None
 
 
+def test_unchanged_rows_keep_their_first_lineage(con):
+    upsert(con, TABLE, periods(0, 1, 1), KEY, "r1")
+    batch = periods(0, 1, 1)
+    batch.loc[1, "actual"] = None  # a null that stays null must also count as unchanged
+    upsert(con, TABLE, batch, KEY, "r2")
+    assert upsert(con, TABLE, batch, KEY, "r3") == 0
+    runs = con.execute(f"SELECT _run_id FROM {TABLE} ORDER BY period_from").df()["_run_id"]
+    assert runs.tolist() == ["r1", "r2"]
+
+
 def test_unknown_table_rejected(con):
     with pytest.raises(ValueError):
         upsert(con, "raw.nope", periods(0, 0, 1), KEY, "r1")
