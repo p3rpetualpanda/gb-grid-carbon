@@ -20,6 +20,15 @@ def test_greenest_window_finds_cleanest_contiguous_block():
     assert app.greenest_window(SERIES, 0.5) == (IDX[6], 10.0)
 
 
+def test_best_forecast_uses_neso_for_first_6h_when_present():
+    issue = pd.DataFrame({
+        "period_from": IDX[:4], "lead": [1, 12, 12, 13],
+        "model_gco2_kwh": [1.0, 2.0, 3.0, 4.0], "neso_gco2_kwh": [10, 20, None, 40],
+    })  # fmt: skip
+    out = app.best_forecast(issue)
+    assert out.tolist() == [10, 20, 3, 4] and out.index.equals(IDX[:4])
+
+
 def test_greenest_window_rejects_too_short_forecast():
     with pytest.raises(ValueError):
         app.greenest_window(SERIES, 8)

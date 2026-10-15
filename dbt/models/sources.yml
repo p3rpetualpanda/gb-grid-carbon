@@ -18,10 +18,19 @@ sources:
         description: Regional forecast intensity; regions 15-18 are aggregates.
       - name: official_forecast_snapshots
         description: NESO 48h forecast as captured at each pipeline run (issued_at).
+      # Unchanged rows aren't rewritten, so freshness = new data; these archives update ~daily.
       - name: weather_observed
         description: Hourly observed weather at fixed GB points (Open-Meteo archive).
+        config:
+          freshness:
+            warn_after: {count: 30, period: hour}
+            error_after: {count: 72, period: hour}
       - name: weather_historical_forecast
         description: Hourly weather forecasts as issued (for leakage-safe model training).
+        config:
+          freshness:
+            warn_after: {count: 30, period: hour}
+            error_after: {count: 72, period: hour}
       - name: weather_forecast_snapshots
         description: Live weather forecast captured at each pipeline run.
 
