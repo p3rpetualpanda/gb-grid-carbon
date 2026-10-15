@@ -196,18 +196,73 @@ def main() -> None:
 
     with accuracy_tab:
         scored = q("""
-            select case when lead <= 12 then '0-6h' when lead <= 24 then '6-12h'
-                        when lead <= 48 then '12-24h' else '24-48h' end as lead_band,
-                   count(*) as n, avg(model_abs_error) as our_mae, avg(neso_abs_error) as neso_mae
-            from marts.fct_model_vs_official
-            where actual_gco2_kwh is not null and neso_abs_error is not null
-            group by 1 order by min(lead)
+            select coalesce(band, 'All') as band,
+                   count(distinct issued_at) as issues, count(*) as n,
+                   min(period_from) as first_target, max(period_from) as last_target,
+                   avg(model_abs_error) as our_mae, avg(neso_abs_error) as neso_mae,
+                   avg(model_abs_error) - avg(neso_abs_error) as gap,
+                   avg(model_gco2_kwh - actual_gco2_kwh) as our_bias,
+                   avg(neso_gco2_kwh - actual_gco2_kwh) as neso_bias,
+                   avg((model_abs_error < neso_abs_error)::int) * 100 as we_closer
+            from (
+                select *, case when lead <= 12 then '0-6 h' when lead <= 24 then '6-12 h'
+                               when lead <= 48 then '12-24 h' else '24-48 h' end as band
+                from marts.fct_model_vs_official
+                where actual_gco2_kwh is not null and neso_abs_error is not null
+            )
+            group by grouping sets ((band), ())
+            order by grouping(band), min(lead)
         """)
         st.subheader("Live track record: our forecast vs NESO's, issued in the same run")
         if scored.empty:
             st.info("The track record builds up as the pipeline runs every 3 hours.")
         else:
-            st.dataframe(scored.round(1), hide_index=True, width="stretch")
+            scored["targets"] = (uk(scored.first_target).dt.strftime("%d %b")
+                                 + " – " + uk(scored.last_target).dt.strftime("%d %b"))  # fmt: skip
+            g = st.column_config.NumberColumn
+            st.dataframe(
+                scored.drop(columns=["first_target", "last_target"]),
+                hide_index=True,
+                column_order=[
+                    "band",
+                    "issues",
+                    "n",
+                    "targets",
+                    "our_mae",
+                    "neso_mae",
+                    "gap",
+                    "we_closer",
+                    "our_bias",
+                    "neso_bias",
+                ],
+                column_config={
+                    "band": "Lead time",
+                    "issues": g("Forecasts", help="Pipeline runs scored in this band"),
+                    "n": g("Half-hours", help="Half-hours with both an actual and NESO forecast"),
+                    "targets": "Target dates",
+                    "our_mae": g("Our MAE", format="%.1f", help="Mean absolute error, gCO₂/kWh"),
+                    "neso_mae": g("NESO MAE", format="%.1f", help="Mean absolute error, gCO₂/kWh"),
+                    "gap": g("Ours − NESO", format="%+.1f", help="Negative = we were better"),
+                    "we_closer": g(
+                        "We were closer",
+                        format="%.0f%%",
+                        help="Share of half-hours where our forecast beat NESO's",
+                    ),
+                    "our_bias": g(
+                        "Our bias", format="%+.1f", help="Mean forecast − actual: + = over-forecast"
+                    ),
+                    "neso_bias": g(
+                        "NESO bias",
+                        format="%+.1f",
+                        help="Mean forecast − actual: + = over-forecast",
+                    ),
+                },
+            )
+            first, last = uk(scored.first_target.min()), uk(scored.last_target.max())
+            days = (last.date() - first.date()).days + 1  # calendar dates spanned, UK time
+            note = (f" Only {days} days of live data so far: each lead band covers different "
+                    "target dates, so compare bands with care." if days < 28 else "")  # fmt: skip
+            st.caption(f"Errors in gCO₂/kWh.{note}")
         st.caption(f"12-month backtest (our model 26.8 MAE vs 44.3 best naïve baseline): "
                    f"[docs/backtest.md]({REPO}/blob/main/docs/backtest.md)")  # fmt: skip
 
