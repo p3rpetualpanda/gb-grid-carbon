@@ -118,6 +118,7 @@ def main() -> None:
             select period_from, actual_gco2_kwh from marts.fct_grid_halfhourly
             where period_from > (select max(period_from) from marts.fct_grid_halfhourly)
                                 - interval 36 hour
+            order by period_from
         """)
         fig = go.Figure()
         fig.add_scatter(x=uk(past.period_from), y=past.actual_gco2_kwh, name="Actual",
