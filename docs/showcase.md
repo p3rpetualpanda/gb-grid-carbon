@@ -6,7 +6,7 @@ Material for the CV, LinkedIn and interviews. Every number comes from `docs/find
 ## CV bullets (pick 2–3)
 
 - Built an automated ELT pipeline (Python, GitHub Actions, dbt, DuckDB/MotherDuck) that loads
-  half-hourly GB grid carbon-intensity, generation-mix and weather data every 3 hours (2.6M+ rows
+  half-hourly GB grid carbon-intensity, generation-mix and weather data every few hours (2.6M+ rows
   since 2017), with idempotent upserts, resumable backfills and 25 dbt data tests.
 - Found and fixed silent data loss through data-quality checks: an API that drops all data after
   31 December in year-spanning requests (missing data 10.4% → 0.29%), and 16 impossible upstream
@@ -23,7 +23,7 @@ Material for the CV, LinkedIn and interviews. Every number comes from `docs/find
 
 > I built a pipeline that answers a simple question: when is Great Britain's electricity cleanest?
 >
-> Every 3 hours it pulls grid and weather data, tests it with dbt, forecasts the next 48 hours and
+> Every few hours it pulls grid and weather data, tests it with dbt, forecasts the next 48 hours and
 > updates a live dashboard. Three things I learned:
 >
 > 1. Midday is now the cleanest time of day for most of the year, thanks to solar. Evenings are

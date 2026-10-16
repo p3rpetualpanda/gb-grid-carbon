@@ -78,7 +78,7 @@ def main() -> None:
     ).t.iloc[0]
     st.caption(
         f"How clean is Great Britain's electricity, and when will it be cleanest? "
-        f"Data refreshes every 3 hours (last: {hhmm(refreshed)} UK time). [Source code]({REPO})"
+        f"Data refreshes every few hours (last: {hhmm(refreshed)} UK time). [Source code]({REPO})"
     )
 
     latest_issue = q("""
@@ -216,7 +216,7 @@ def main() -> None:
         """)
         st.subheader("Live track record: our forecast vs NESO's, issued in the same run")
         if scored.empty:
-            st.info("The track record builds up as the pipeline runs every 3 hours.")
+            st.info("The track record builds up as the pipeline runs every few hours.")
         else:
             scored["targets"] = (uk(scored.first_target).dt.strftime("%d %b")
                                  + " – " + uk(scored.last_target).dt.strftime("%d %b"))  # fmt: skip
@@ -270,7 +270,7 @@ def main() -> None:
     with about_tab:
         st.markdown(f"""
 **How it works.** A Python pipeline pulls the NESO Carbon Intensity API and Open-Meteo weather into
-MotherDuck every 3 hours (GitHub Actions); dbt models and tests the data; a LightGBM model
+MotherDuck every few hours (GitHub Actions); dbt models and tests the data; a LightGBM model
 forecasts the next 48 hours; this app reads the result.
 [Code]({REPO}) · [dbt docs](https://p3rpetualpanda.github.io/gb-grid-carbon/)
 
