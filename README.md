@@ -8,7 +8,7 @@
 > predict it?**
 
 An automated pipeline that collects half-hourly GB grid carbon intensity, generation mix and
-weather every 3 hours, models and tests it with dbt, forecasts the next 48 hours with LightGBM,
+weather every few hours, models and tests it with dbt, forecasts the next 48 hours with LightGBM,
 scores that forecast live against the official one, and serves a Streamlit dashboard. About 2.6M
 rows since 2017, all on free tiers.
 
@@ -21,7 +21,7 @@ flowchart LR
   D --> F[48h LightGBM forecast]
   F --> D
   D --> S[Streamlit dashboard]
-  G[GitHub Actions] -->|every 3h| E
+  G[GitHub Actions] -->|every 2h| E
 ```
 
 ## Key findings
@@ -88,7 +88,7 @@ Found by running against the real APIs, not by unit tests (full write-up in
 | 3 | Extraction + idempotent loading + backfill (48 offline tests; ~2.3M rows since 2017) | ✅ Done |
 | 4 | MotherDuck cloud warehouse (same code, `DB_TARGET=motherduck`) | ✅ Done |
 | 5 | dbt models (staging → marts) + 25 data tests | ✅ Done |
-| 6 | Scheduled GitHub Actions pipeline (every 3h) + dbt docs site | ✅ Live |
+| 6 | Scheduled GitHub Actions pipeline (every 2h) + dbt docs site | ✅ Live |
 | 7 | Analysis & findings → [`docs/findings.md`](docs/findings.md) | ✅ Done |
 | 8 | 48h forecast, backtest, live scoring vs NESO → [`docs/backtest.md`](docs/backtest.md) | ✅ Live |
 | 9 | Streamlit dashboard (`app/streamlit_app.py`) → [live](https://gb-grid-carbon-b8k4zy3yzvfzqzxewxzdsk.streamlit.app/) | ✅ Live |
