@@ -9,8 +9,8 @@
 
 An automated pipeline that collects half-hourly GB grid carbon intensity, generation mix,
 weather and NESO's wind and solar forecasts every few hours, models and tests it with dbt,
-forecasts the next 48 hours with LightGBM, scores that forecast live against the official one, and serves a Streamlit dashboard. About 2.6M
-rows since 2017, all on free tiers.
+forecasts the next 48 hours with LightGBM, scores that forecast live against the official one,
+and serves a Streamlit dashboard. About 2.6M rows since 2017, all on free tiers.
 
 ```mermaid
 flowchart LR
