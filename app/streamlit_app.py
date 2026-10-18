@@ -46,6 +46,9 @@ def greenest_window(forecast: pd.Series, hours: float) -> tuple[pd.Timestamp, fl
     return forecast.index[end - slots + 1], float(means.min())
 
 
+PLAIN_BANDS = {"0-6 h": "Next 6 hours", "6-12 h": "6–12 hours ahead",
+               "12-24 h": "12–24 hours ahead", "24-48 h": "1–2 days ahead",
+               "All": "All (next 48 hours)"}  # fmt: skip
 NESO_LEADS = 12  # NESO beats our model at 0-6 h (live and backtest), so trust it there
 
 
@@ -130,6 +133,7 @@ def main() -> None:
                count(distinct issued_at) as issues, count(*) as n,
                min(period_from) as first_target, max(period_from) as last_target,
                avg(model_abs_error) as our_mae, avg(neso_abs_error) as neso_mae,
+               avg(actual_gco2_kwh) as mean_actual,
                avg(model_abs_error) - avg(neso_abs_error) as gap,
                avg(model_gco2_kwh - actual_gco2_kwh) as our_bias,
                avg(neso_gco2_kwh - actual_gco2_kwh) as neso_bias,
@@ -332,56 +336,117 @@ def main() -> None:
         st.plotly_chart(fig, width="stretch")
 
     with accuracy_tab:
-        st.subheader("Live track record: our forecast vs NESO's, issued in the same run")
+        st.subheader("How good is the forecast?")
+        st.markdown(
+            "Every few hours we forecast the next 48 hours. Once the real figures are published, "
+            "we check how far off we were. NESO, which runs the grid, publishes its own forecast "
+            "at the same time, so we score both the same way."
+        )
         if scored.empty:
             st.info("The track record builds up as the pipeline runs every few hours.")
         else:
-            scored["targets"] = (uk(scored.first_target).dt.strftime("%d %b")
-                                 + " – " + uk(scored.last_target).dt.strftime("%d %b"))  # fmt: skip
-            g = st.column_config.NumberColumn
-            st.dataframe(
-                scored.drop(columns=["first_target", "last_target"]),
-                hide_index=True,
-                column_order=[
-                    "band",
-                    "issues",
-                    "n",
-                    "targets",
-                    "our_mae",
-                    "neso_mae",
-                    "gap",
-                    "we_closer",
-                    "our_bias",
-                    "neso_bias",
-                ],
-                column_config={
-                    "band": "Lead time",
-                    "issues": g("Forecasts", help="Pipeline runs scored in this band"),
-                    "n": g("Half-hours", help="Half-hours with both an actual and NESO forecast"),
-                    "targets": "Target dates",
-                    "our_mae": g("Our MAE", format="%.1f", help="Mean absolute error, gCO₂/kWh"),
-                    "neso_mae": g("NESO MAE", format="%.1f", help="Mean absolute error, gCO₂/kWh"),
-                    "gap": g("Ours − NESO", format="%+.1f", help="Negative = we were better"),
-                    "we_closer": g(
-                        "We were closer",
-                        format="%.0f%%",
-                        help="Share of half-hours where our forecast beat NESO's",
-                    ),
-                    "our_bias": g(
-                        "Our bias", format="%+.1f", help="Mean forecast − actual: + = over-forecast"
-                    ),
-                    "neso_bias": g(
-                        "NESO bias",
-                        format="%+.1f",
-                        help="Mean forecast − actual: + = over-forecast",
-                    ),
-                },
+            overall = scored.set_index("band").loc["All"]
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Our forecast is typically off by", f"{overall.our_mae:.0f} gCO₂/kWh",
+                      help="Average distance between forecast and actual, high or low")  # fmt: skip
+            c2.metric("NESO's forecast is typically off by", f"{overall.neso_mae:.0f} gCO₂/kWh")
+            c3.metric("Half-hours where ours was closer", f"{overall.we_closer:.0f}%")
+            st.markdown(
+                f"Put simply: when we forecast, say, 150 gCO₂/kWh, the real figure usually lands "
+                f"within about **{overall.our_mae:.0f}** of that, which is roughly "
+                f"**{overall.our_mae / overall.mean_actual:.0%}** of a typical value. The chart "
+                "below splits this by how far ahead the forecast was looking."
             )
-            first, last = uk(scored.first_target.min()), uk(scored.last_target.max())
-            days = (last.date() - first.date()).days + 1  # calendar dates spanned, UK time
-            note = (f" Only {days} days of live data so far: each lead band covers different "
-                    "target dates, so compare bands with care." if days < 28 else "")  # fmt: skip
-            st.caption(f"Errors in gCO₂/kWh.{note}")
+
+            bands = scored[scored.band != "All"].assign(label=lambda d: d.band.map(PLAIN_BANDS))
+            fig = go.Figure()
+            for col, name, colour in (("our_mae", "Our forecast", ORANGE),
+                                      ("neso_mae", "NESO's forecast", AQUA)):  # fmt: skip
+                fig.add_bar(x=bands.label, y=bands[col], name=name, marker_color=colour,
+                            text=bands[col].round(0), textposition="outside",
+                            hovertemplate="%{x}: off by %{y:.0f} gCO₂/kWh")  # fmt: skip
+            fig.update_layout(
+                title="Average miss by how far ahead (lower is better)",
+                yaxis_title="gCO₂/kWh",
+                barmode="group",
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            )
+            st.plotly_chart(fig, width="stretch")
+
+            example = q("""
+                select issued_at, period_from, model_gco2_kwh, neso_gco2_kwh, actual_gco2_kwh
+                from marts.fct_model_vs_official
+                where issued_at = (
+                    select issued_at from marts.fct_model_vs_official
+                    group by issued_at order by count(actual_gco2_kwh) desc, issued_at desc
+                    limit 1
+                )
+                order by period_from
+            """)
+            fig = go.Figure()
+            for col, name, colour, dash in (
+                ("actual_gco2_kwh", "What actually happened", BLUE, "solid"),
+                ("model_gco2_kwh", "Our forecast", ORANGE, "solid"),
+                ("neso_gco2_kwh", "NESO's forecast", AQUA, "dot"),
+            ):
+                fig.add_scatter(x=uk(example.period_from), y=example[col], name=name,
+                                line=dict(color=colour, width=2, dash=dash))  # fmt: skip
+            fig.update_layout(
+                title=f"Example: the forecast made {uk(example.issued_at.iloc[0]):%a %d %b, %H:%M} "
+                "vs what happened (UK time)",
+                yaxis_title="gCO₂/kWh",
+                hovermode="x unified",
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            )
+            st.plotly_chart(fig, width="stretch")
+            st.caption("The most recent forecast whose whole 48 hours have now happened.")
+
+            with st.expander("Detailed numbers and what they mean"):
+                st.markdown(
+                    "- **Typically off by** (MAE, mean absolute error): the average gap between "
+                    "forecast and actual, whether too high or too low.\n"
+                    "- **Bias**: whether a forecast runs high (+) or low (−) on average.\n"
+                    "- **We were closer**: the share of half-hours where our forecast was nearer "
+                    "the actual than NESO's.\n"
+                    "- **gCO₂/kWh**: grams of CO₂ emitted per kilowatt-hour of electricity."
+                )
+                table = scored.assign(band=scored.band.map(PLAIN_BANDS))
+                first_day = uk(table.first_target).dt.strftime("%d %b")
+                table["targets"] = first_day + " – " + uk(table.last_target).dt.strftime("%d %b")
+                g = st.column_config.NumberColumn
+                st.dataframe(
+                    table,
+                    hide_index=True,
+                    column_order=[
+                        "band",
+                        "issues",
+                        "n",
+                        "targets",
+                        "our_mae",
+                        "neso_mae",
+                        "gap",
+                        "we_closer",
+                        "our_bias",
+                        "neso_bias",
+                    ],  # fmt: skip
+                    column_config={
+                        "band": "How far ahead",
+                        "issues": g("Forecasts", help="Forecasts scored in this band"),
+                        "n": g("Half-hours", help="Half-hours with an actual and both forecasts"),
+                        "targets": "Dates covered",
+                        "our_mae": g("Ours: typically off by", format="%.1f"),
+                        "neso_mae": g("NESO: typically off by", format="%.1f"),
+                        "gap": g("Ours − NESO", format="%+.1f", help="Negative = ours was better"),
+                        "we_closer": g("We were closer", format="%.0f%%"),
+                        "our_bias": g("Our bias", format="%+.1f", help="+ = forecast ran high"),
+                        "neso_bias": g("NESO bias", format="%+.1f", help="+ = forecast ran high"),
+                    },
+                )
+                first, last = uk(scored.first_target.min()), uk(scored.last_target.max())
+                days = (last.date() - first.date()).days + 1  # calendar dates spanned, UK time
+                if days < 28:
+                    st.caption(f"Only {days} days of live data so far, and each row covers "
+                               "different dates, so compare rows with care.")  # fmt: skip
         st.caption(backtest_caption())
 
     with about_tab:
