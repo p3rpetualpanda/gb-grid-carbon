@@ -6,6 +6,7 @@ DuckDB file. Queries dbt marts only; every timestamp is UTC in the warehouse, sh
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -17,6 +18,18 @@ TZ = "Europe/London"
 BLUE, ORANGE, AQUA = "#2a78d6", "#eb6834", "#1baf7a"  # categorical slots 1-3
 SEQ_BLUE = ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"]
 REPO = "https://github.com/p3rpetualpanda/gb-grid-carbon"
+BACKTEST_RESULTS = Path(__file__).resolve().parents[1] / "docs" / "backtest_results.json"
+
+
+def backtest_caption(path: Path = BACKTEST_RESULTS) -> str:
+    """One-line backtest summary from the file analysis/backtest.py writes."""
+    link = f"[docs/backtest.md]({REPO}/blob/main/docs/backtest.md)"
+    try:
+        r = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return f"12-month backtest: {link}"
+    return (f"12-month backtest, run {r['run_date']} (our model {r['model_mae']:.1f} MAE vs "
+            f"{r['best_baseline_mae']:.1f} best naïve baseline): {link}")  # fmt: skip
 
 
 def greenest_window(forecast: pd.Series, hours: float) -> tuple[pd.Timestamp, float]:
@@ -264,8 +277,7 @@ def main() -> None:
             note = (f" Only {days} days of live data so far: each lead band covers different "
                     "target dates, so compare bands with care." if days < 28 else "")  # fmt: skip
             st.caption(f"Errors in gCO₂/kWh.{note}")
-        st.caption(f"12-month backtest (our model 26.8 MAE vs 44.3 best naïve baseline): "
-                   f"[docs/backtest.md]({REPO}/blob/main/docs/backtest.md)")  # fmt: skip
+        st.caption(backtest_caption())
 
     with about_tab:
         st.markdown(f"""

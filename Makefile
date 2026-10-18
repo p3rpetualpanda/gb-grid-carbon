@@ -3,7 +3,7 @@
 
 PY ?= python
 
-.PHONY: help setup lint format test check init-db backfill incremental status fixtures
+.PHONY: help setup lint format test check init-db backfill incremental status fixtures backtest
 
 help:
 	@echo "setup        - install the package + dev tools (editable)"
@@ -16,6 +16,7 @@ help:
 	@echo "incremental  - bring all datasets up to date + snapshot forecasts"
 	@echo "status       - row counts / coverage / latest runs"
 	@echo "fixtures     - re-record API responses used by the tests"
+	@echo "backtest     - re-run the backtest and copy its numbers into the docs"
 
 setup:
 	$(PY) -m pip install -e ".[dev,dbt,ml,analysis]"
@@ -48,3 +49,7 @@ status:
 
 fixtures:
 	$(PY) scripts/record_fixtures.py
+
+backtest:
+	$(PY) analysis/backtest.py
+	$(PY) scripts/update_backtest_docs.py
