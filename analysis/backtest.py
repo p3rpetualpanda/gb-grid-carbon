@@ -23,7 +23,14 @@ from gridcarbon.config import Settings  # noqa: E402
 from gridcarbon.load import connect  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
-BLUE, ORANGE, AQUA, YELLOW, MAGENTA = "#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4"
+BLUE, ORANGE, AQUA, YELLOW, MAGENTA, VIOLET = (
+    "#2a78d6",
+    "#eb6834",
+    "#1baf7a",
+    "#eda100",
+    "#e87ba4",
+    "#7c5cd6",
+)
 INK, INK2, MUTED, GRID, AXIS, SURFACE = (
     "#0b0b0b",
     "#52514e",
@@ -36,8 +43,12 @@ INK, INK2, MUTED, GRID, AXIS, SURFACE = (
 con = connect(Settings(db_target="local"))
 grid, wx = fc.load_history(con)
 hols = fc.holidays()
-preds = fc.backtest(grid, wx, hols, months=12)
-methods = {"model": "Our model (LightGBM)", "neso": "NESO published forecast*",
+neso = fc.load_neso_forecasts(con)
+# The live model ("model") plus a candidate that adds NESO's own wind/solar forecasts as inputs.
+variants = {"model": fc.FEATURES, "model_neso": fc.FEATURES + fc.NESO_FEATURES}
+preds = fc.backtest(grid, wx, hols, months=12, neso=neso, variants=variants)
+methods = {"model": "Our model (LightGBM)", "model_neso": "Our model + NESO wind/solar forecasts",
+           "neso": "NESO published forecast*",
            "last_actual": "Last known actual",
            "lag_day": "Same slot, last known day", "lag_week": "Same slot, last week"}  # fmt: skip
 table = fc.mae_by_lead(preds, list(methods))
@@ -48,7 +59,7 @@ fig, ax = plt.subplots(figsize=(8, 4.2), dpi=150)
 fig.patch.set_facecolor(SURFACE)
 ax.set_facecolor(SURFACE)
 for (col, label), colour in zip(
-    methods.items(), (BLUE, ORANGE, AQUA, YELLOW, MAGENTA), strict=True
+    methods.items(), (BLUE, VIOLET, ORANGE, AQUA, YELLOW, MAGENTA), strict=True
 ):
     ax.plot(bands, table.loc[bands, col], color=colour, linewidth=2, marker="o", markersize=5,
             label=label)  # fmt: skip
@@ -101,7 +112,10 @@ Open-Meteo's *historical forecast*, never observed weather. These rules are enfo
 
 **Result.** Over all leads the model's MAE is **{overall["model"]:.1f} gCO₂/kWh**, vs
 **{best_baseline:.1f}** for the best naïve baseline (**{1 - overall["model"] / best_baseline:.0%}
-better**) and **{overall["neso"]:.1f}** for NESO's published forecast.
+better**) and **{overall["neso"]:.1f}** for NESO's published forecast. Adding NESO's own
+day-ahead wind and embedded wind/solar forecasts as inputs (the vintage issued before each
+forecast, never a later one) gives **{overall["model_neso"]:.1f}**; it is a candidate, not yet the
+live model.
 
 ![MAE by lead](img/backtest_mae_by_lead.png)
 

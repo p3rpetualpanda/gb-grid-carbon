@@ -11,6 +11,7 @@ import duckdb
 import pandas as pd
 
 from gridcarbon.extract import carbon_intensity as ci
+from gridcarbon.extract import neso
 from gridcarbon.extract import weather as wx
 from gridcarbon.http import ApiClient
 from gridcarbon.load import loaded_windows, log_window, max_time, upsert
@@ -54,11 +55,29 @@ DATASETS: dict[str, Dataset] = {
             ("time", "point_id"), wx.HISTORICAL_FORECAST_EARLIEST,
             wx.HISTORICAL_FORECAST_MAX_DAYS, wx.fetch_weather_historical_forecast,
         ),
+        # Keyed on issue time: every vintage is kept, so features can use the one known at issue.
+        Dataset(
+            "neso_wind_forecast", "raw.neso_wind_forecast", "issued_at",
+            ("issued_at", "period_from"), neso.EARLIEST, neso.WIND_MAX_DAYS,
+            neso.fetch_wind_forecast,
+        ),
+        Dataset(
+            "neso_embedded_forecast", "raw.neso_embedded_forecast", "issued_at",
+            ("issued_at", "period_from"), neso.EARLIEST, neso.EMBEDDED_MAX_DAYS,
+            neso.fetch_embedded_forecast,
+        ),
     )
 }  # fmt: skip
 
 # Regional history is ~3 MB per 10 days of JSON, so it is opt-in for backfills.
-BACKFILL_DEFAULT = ("intensity", "generation", "weather_observed", "weather_historical_forecast")
+BACKFILL_DEFAULT = (
+    "intensity",
+    "generation",
+    "weather_observed",
+    "weather_historical_forecast",
+    "neso_wind_forecast",
+    "neso_embedded_forecast",
+)
 INCREMENTAL_DEFAULT = tuple(DATASETS)
 
 

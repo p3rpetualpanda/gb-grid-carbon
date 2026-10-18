@@ -31,6 +31,15 @@ FEATURES = [
     "last_actual", "mean_24h", "lag_day", "lag_week",
     "wind_speed", "solar_radiation", "temperature",
 ]  # fmt: skip
+# Candidate inputs from NESO's own forecasts (raw.neso_*), each the latest vintage made at least
+# NESO_LAG before issue. Backtested alongside FEATURES; the live model uses them once they win.
+NESO_FEATURES = ["neso_wind_mw", "neso_embedded_wind_mw", "neso_embedded_solar_mw"]
+NESO_LAG = pd.Timedelta(minutes=30)  # allowance for publication after Forecast_Timestamp
+NESO_SQL = {
+    "raw.neso_wind_forecast": "forecast_mw as neso_wind_mw",
+    "raw.neso_embedded_forecast": "wind_mw as neso_embedded_wind_mw, "
+    "solar_mw as neso_embedded_solar_mw",
+}
 HOLIDAYS_CSV = Path(__file__).resolve().parents[2] / "dbt" / "seeds" / "uk_bank_holidays.csv"
 
 # Same point roles as dbt/models/intermediate/int_weather_gb.sql, applied to forecast weather.
@@ -69,12 +78,51 @@ def load_history(con) -> tuple[pd.DataFrame, pd.DataFrame]:
     return grid, wx.set_index("hour_utc")
 
 
+def load_neso_forecasts(con) -> list[pd.DataFrame]:
+    """Every vintage of NESO's wind and embedded wind/solar forecasts (for `features(neso=)`)."""
+    return [
+        con.sql(f"select issued_at, period_from, {cols} from {table} order by 1, 2").df()
+        for table, cols in NESO_SQL.items()
+    ]
+
+
+def latest_vintage(issued: pd.DatetimeIndex, target, vintages: pd.DataFrame) -> pd.DataFrame:
+    """For each (issue, target) row: the newest vintage's values made by issue - NESO_LAG."""
+    cols = [c for c in vintages.columns if c not in ("issued_at", "period_from")]
+    left = pd.DataFrame(
+        {
+            "issued_at": (issued - NESO_LAG).astype("datetime64[ns, UTC]"),
+            "period_from": pd.DatetimeIndex(target).astype("datetime64[ns, UTC]"),
+            "_row": np.arange(len(issued)),
+        }
+    )
+    right = vintages.astype(
+        {"issued_at": "datetime64[ns, UTC]", "period_from": "datetime64[ns, UTC]"}
+    )
+    merged = pd.merge_asof(
+        left.sort_values("issued_at"),
+        right.sort_values("issued_at"),
+        on="issued_at",
+        by="period_from",
+        direction="backward",
+    )
+    return merged.sort_values("_row")[cols].reset_index(drop=True)
+
+
 def issue_times(start, end) -> pd.DatetimeIndex:
     return pd.date_range(pd.Timestamp(start).ceil(ISSUE_EVERY), end, freq=ISSUE_EVERY)
 
 
-def features(grid: pd.DataFrame, wx: pd.DataFrame, issues: pd.DatetimeIndex, hols: set):
-    """One row per (issue, lead). Only data with period_from < issue - ACTUAL_LAG is used."""
+def features(
+    grid: pd.DataFrame,
+    wx: pd.DataFrame,
+    issues: pd.DatetimeIndex,
+    hols: set,
+    neso: list[pd.DataFrame] | None = None,
+):
+    """One row per (issue, lead). Only data with period_from < issue - ACTUAL_LAG is used, and
+    only NESO forecast vintages made by issue - NESO_LAG (NESO_FEATURES are NaN without `neso`).
+    """
     y = grid["y"]
     issued = issues.repeat(HORIZON)
     lead = np.tile(np.arange(1, HORIZON + 1), len(issues))
@@ -84,7 +132,7 @@ def features(grid: pd.DataFrame, wx: pd.DataFrame, issues: pd.DatetimeIndex, hol
     days_back = np.ceil((target - last_known) / pd.Timedelta(days=1)).astype(int)
     local = target.tz_convert("Europe/London")
     weather = wx.reindex(target.floor("h"))
-    return pd.DataFrame(
+    rows = pd.DataFrame(
         {
             "issued_at": issued,
             "period_from": target,
@@ -104,9 +152,15 @@ def features(grid: pd.DataFrame, wx: pd.DataFrame, issues: pd.DatetimeIndex, hol
             "neso": grid["neso"].reindex(target).to_numpy(),
         }
     )
+    for col in NESO_FEATURES:
+        rows[col] = np.nan
+    for vintages in neso or []:
+        found = latest_vintage(issued, target, vintages)
+        rows[found.columns] = found.to_numpy(dtype=float)
+    return rows
 
 
-def fit(rows: pd.DataFrame):
+def fit(rows: pd.DataFrame, feature_cols: list[str] = FEATURES):
     import lightgbm as lgb  # optional dependency: pip install -e ".[ml]"
 
     rows = rows.dropna(subset=["y"])
@@ -114,7 +168,7 @@ def fit(rows: pd.DataFrame):
         n_estimators=400, learning_rate=0.05, num_leaves=63, min_child_samples=50,
         subsample=0.8, subsample_freq=1, colsample_bytree=0.9, verbose=-1,
     )  # fmt: skip
-    return model.fit(rows[FEATURES], rows["y"])
+    return model.fit(rows[feature_cols], rows["y"])
 
 
 def blend(rows: pd.DataFrame, model_pred) -> np.ndarray:
@@ -124,22 +178,38 @@ def blend(rows: pd.DataFrame, model_pred) -> np.ndarray:
     return w * np.nan_to_num(last) + (1 - w) * np.asarray(model_pred)
 
 
-def training_rows(grid: pd.DataFrame, wx: pd.DataFrame, hols: set, until) -> pd.DataFrame:
+def training_rows(
+    grid: pd.DataFrame, wx: pd.DataFrame, hols: set, until, neso=None
+) -> pd.DataFrame:
     """Rows whose targets all lie before `until` (issues stop 48 h earlier)."""
     start = max(grid.index.min() + pd.Timedelta(days=8), wx.index.min())
-    return features(grid, wx, issue_times(start, pd.Timestamp(until) - HORIZON * STEP), hols)
+    issues = issue_times(start, pd.Timestamp(until) - HORIZON * STEP)
+    return features(grid, wx, issues, hols, neso)
 
 
-def backtest(grid: pd.DataFrame, wx: pd.DataFrame, hols: set, months: int = 12) -> pd.DataFrame:
+def backtest(
+    grid: pd.DataFrame,
+    wx: pd.DataFrame,
+    hols: set,
+    months: int = 12,
+    neso: list[pd.DataFrame] | None = None,
+    variants: dict[str, list[str]] | None = None,
+) -> pd.DataFrame:
     """Rolling-origin backtest: for each of the last `months` months, train only on targets
-    before the month starts, then forecast every issue (each 6.5 h) inside it."""
+    before the month starts, then forecast every issue (each 6.5 h) inside it.
+
+    `variants` maps an output column to a feature list (default: {"model": FEATURES}); every
+    variant is trained and scored on the same folds, so they compare like for like."""
+    variants = variants or {"model": FEATURES}
     last = grid["y"].dropna().index.max()
     folds = pd.date_range(end=last.floor("D"), periods=months + 1, freq="MS")
     out = []
     for fold_start, fold_end in zip(folds[:-1], folds[1:], strict=True):
-        model = fit(training_rows(grid, wx, hols, fold_start))
-        test = features(grid, wx, issue_times(fold_start, fold_end - STEP), hols)
-        out.append(test.assign(model=blend(test, model.predict(test[FEATURES]))))
+        train = training_rows(grid, wx, hols, fold_start, neso)
+        test = features(grid, wx, issue_times(fold_start, fold_end - STEP), hols, neso)
+        for name, cols in variants.items():
+            test[name] = blend(test, fit(train, cols).predict(test[cols]))
+        out.append(test)
     return pd.concat(out, ignore_index=True).dropna(subset=["y"])
 
 
