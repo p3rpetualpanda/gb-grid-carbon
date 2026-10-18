@@ -69,8 +69,15 @@ def test_snapshot_forecasts_appends_by_issue_time(con, monkeypatch):
     monkeypatch.setattr(
         pipeline.wx, "fetch_weather_forecast", lambda c, now: official.iloc[0:0][["issued_at"]]
     )
+    wind = pd.DataFrame({
+        "issued_at": pd.to_datetime([issued], utc=True),
+        "period_from": pd.to_datetime([issued], utc=True),
+        "forecast_mw": [9000.0], "capacity_mw": [25502.0],
+    })  # fmt: skip
+    monkeypatch.setattr(pipeline.neso, "fetch_wind_14d_forecast", lambda c: wind)
     run = {"run_id": "r1", "rows_loaded": 0}
     pipeline.snapshot_forecasts(con, None, NOW, run)
     pipeline.snapshot_forecasts(con, None, NOW, run)  # same issue time: replaced, not duplicated
     n = con.execute("SELECT count(*) FROM raw.official_forecast_snapshots").fetchone()[0]
     assert n == 2
+    assert con.execute("SELECT count(*) FROM raw.neso_wind_14d_snapshots").fetchone()[0] == 1

@@ -238,9 +238,8 @@ def main() -> None:
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             )
             st.plotly_chart(fig, width="stretch")
-            st.caption("More wind and sun means lower carbon. NESO publishes its wind farm "
-                       "forecast once a day for that day only, so that line stops early; the "
-                       "local-network wind and solar forecast runs 3 days ahead.")  # fmt: skip
+            st.caption("More wind and sun means lower carbon. Each line is NESO's newest "
+                       "forecast for that half-hour.")  # fmt: skip
 
         mix = q("""
             select period_from, wind_pct as "Wind", gas_pct as "Gas", nuclear_pct as "Nuclear",
