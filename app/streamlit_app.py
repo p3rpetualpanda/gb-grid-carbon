@@ -171,8 +171,8 @@ def main() -> None:
         fig = go.Figure()
         if err.notna().any():
             # Band first so the lines draw on top; tonexty fills between lower and upper.
-            fig.add_scatter(x=uk(forecast.index), y=forecast - err, line=dict(width=0),
-                            hoverinfo="skip", showlegend=False)  # fmt: skip
+            fig.add_scatter(x=uk(forecast.index), y=(forecast - err).clip(lower=0),
+                            line=dict(width=0), hoverinfo="skip", showlegend=False)  # fmt: skip
             fig.add_scatter(x=uk(forecast.index), y=forecast + err, line=dict(width=0),
                             fill="tonexty", fillcolor="rgba(235, 104, 52, 0.15)",
                             hoverinfo="skip", name="± typical error (live MAE)")  # fmt: skip
@@ -238,27 +238,30 @@ def main() -> None:
             order by period_from
         """)
         st.subheader("What's powering the grid")
-        now_mix = mix.iloc[-1]
-        shares = now_mix[list(FUEL_COLOURS)].astype(float).sort_values()
-        c1, c2 = st.columns([1, 2])
-        fig = px.bar(x=shares.values, y=shares.index, orientation="h", text_auto=".0f",
-                     color=shares.index, color_discrete_map=FUEL_COLOURS,
-                     labels=dict(x="% of generation", y=""))  # fmt: skip
-        fig.update_layout(title=f"Now ({hhmm(now_mix.period_from)})", showlegend=False)
-        fig.update_xaxes(range=[0, shares.max() * 1.2])  # room for the outside labels
-        fig.update_traces(textposition="outside", cliponaxis=False,
-                          hovertemplate="%{y}: %{x:.1f}%<extra></extra>")  # fmt: skip
-        c1.plotly_chart(fig, width="stretch")
-        long = mix.melt("period_from", var_name="fuel", value_name="pct")
-        long["period_from"] = uk(long["period_from"])
-        fig = px.area(long, x="period_from", y="pct", color="fuel",
-                      color_discrete_map=FUEL_COLOURS,
-                      category_orders=dict(fuel=list(FUEL_COLOURS)),
-                      labels=dict(period_from="", pct="% of generation", fuel=""))  # fmt: skip
-        fig.update_layout(title="Last 7 days", hovermode="x unified")
-        c2.plotly_chart(fig, width="stretch")
-        st.caption("Other = biomass, hydro, coal and other sources. Shares of GB generation "
-                   "(Carbon Intensity API).")  # fmt: skip
+        if mix.empty:
+            st.info("No generation mix loaded yet.")
+        else:
+            now_mix = mix.iloc[-1]
+            shares = now_mix[list(FUEL_COLOURS)].astype(float).sort_values()
+            c1, c2 = st.columns([1, 2])
+            fig = px.bar(x=shares.values, y=shares.index, orientation="h", text_auto=".0f",
+                         color=shares.index, color_discrete_map=FUEL_COLOURS,
+                         labels=dict(x="% of generation", y=""))  # fmt: skip
+            fig.update_layout(title=f"Now ({hhmm(now_mix.period_from)})", showlegend=False)
+            fig.update_xaxes(range=[0, shares.max() * 1.2])  # room for the outside labels
+            fig.update_traces(textposition="outside", cliponaxis=False,
+                              hovertemplate="%{y}: %{x:.1f}%<extra></extra>")  # fmt: skip
+            c1.plotly_chart(fig, width="stretch")
+            long = mix.melt("period_from", var_name="fuel", value_name="pct")
+            long["period_from"] = uk(long["period_from"])
+            fig = px.area(long, x="period_from", y="pct", color="fuel",
+                          color_discrete_map=FUEL_COLOURS,
+                          category_orders=dict(fuel=list(FUEL_COLOURS)),
+                          labels=dict(period_from="", pct="% of generation", fuel=""))  # fmt: skip
+            fig.update_layout(title="Last 7 days", hovermode="x unified")
+            c2.plotly_chart(fig, width="stretch")
+            st.caption("Other = biomass, hydro, coal and other sources. Shares of GB generation "
+                       "(Carbon Intensity API).")  # fmt: skip
 
     with planner_tab:
         st.subheader("When should I run it?")
