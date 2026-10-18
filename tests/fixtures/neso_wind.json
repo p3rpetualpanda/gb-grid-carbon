@@ -1,0 +1,103 @@
+{
+ "help": "https://api.neso.energy/api/3/action/help_show?name=datastore_search_sql",
+ "success": true,
+ "result": {
+  "records": [
+   {
+    "Forecast_Timestamp": "2024-01-01T08:49:23",
+    "Capacity": "20203",
+    "Datetime_GMT": "2024-01-02T00:00:00",
+    "_full_text": "'-01':2,8,14,15 '-02':3,9 '00':5,6 '1':10 '13053':12 '20203':11 '2024':1,7,13 '23':18 '49':17 't00':4 't08':16",
+    "Settlement_period": 1,
+    "Incentive_forecast": "13053",
+    "Date": "2024-01-02",
+    "_id": 100125
+   },
+   {
+    "Forecast_Timestamp": "2024-01-01T08:49:23",
+    "Capacity": "20203",
+    "Datetime_GMT": "2024-01-02T00:30:00",
+    "_full_text": "'-01':2,8,14,15 '-02':3,9 '00':6 '13402':12 '2':10 '20203':11 '2024':1,7,13 '23':18 '30':5 '49':17 't00':4 't08':16",
+    "Settlement_period": 2,
+    "Incentive_forecast": "13402",
+    "Date": "2024-01-02",
+    "_id": 100126
+   },
+   {
+    "Forecast_Timestamp": "2024-01-01T08:49:23",
+    "Capacity": "20203",
+    "Datetime_GMT": "2024-01-02T01:00:00",
+    "_full_text": "'-01':2,8,14,15 '-02':3,9 '00':5,6 '13691':12 '20203':11 '2024':1,7,13 '23':18 '3':10 '49':17 't01':4 't08':16",
+    "Settlement_period": 3,
+    "Incentive_forecast": "13691",
+    "Date": "2024-01-02",
+    "_id": 100127
+   },
+   {
+    "Forecast_Timestamp": "2024-01-01T08:49:23",
+    "Capacity": "20203",
+    "Datetime_GMT": "2024-01-02T01:30:00",
+    "_full_text": "'-01':2,8,14,15 '-02':3,9 '00':6 '13921':12 '20203':11 '2024':1,7,13 '23':18 '30':5 '4':10 '49':17 't01':4 't08':16",
+    "Settlement_period": 4,
+    "Incentive_forecast": "13921",
+    "Date": "2024-01-02",
+    "_id": 100128
+   },
+   {
+    "Forecast_Timestamp": "2024-01-01T08:49:23",
+    "Capacity": "20203",
+    "Datetime_GMT": "2024-01-02T02:00:00",
+    "_full_text": "'-01':2,8,14,15 '-02':3,9 '00':5,6 '14071':12 '20203':11 '2024':1,7,13 '23':18 '49':17 '5':10 't02':4 't08':16",
+    "Settlement_period": 5,
+    "Incentive_forecast": "14071",
+    "Date": "2024-01-02",
+    "_id": 100129
+   },
+   {
+    "Forecast_Timestamp": "2024-01-01T08:49:23",
+    "Capacity": "20203",
+    "Datetime_GMT": "2024-01-02T02:30:00",
+    "_full_text": "'-01':2,8,14,15 '-02':3,9 '00':6 '14143':12 '20203':11 '2024':1,7,13 '23':18 '30':5 '49':17 '6':10 't02':4 't08':16",
+    "Settlement_period": 6,
+    "Incentive_forecast": "14143",
+    "Date": "2024-01-02",
+    "_id": 100130
+   }
+  ],
+  "fields": [
+   {
+    "type": "int4",
+    "id": "_id"
+   },
+   {
+    "type": "tsvector",
+    "id": "_full_text"
+   },
+   {
+    "type": "timestamp",
+    "id": "Datetime_GMT"
+   },
+   {
+    "type": "date",
+    "id": "Date"
+   },
+   {
+    "type": "int4",
+    "id": "Settlement_period"
+   },
+   {
+    "type": "numeric",
+    "id": "Capacity"
+   },
+   {
+    "type": "numeric",
+    "id": "Incentive_forecast"
+   },
+   {
+    "type": "timestamp",
+    "id": "Forecast_Timestamp"
+   }
+  ],
+  "sql": "SELECT * FROM \"7524ec65-f782-4258-aaf8-5b926c17b966\" WHERE \"Forecast_Timestamp\" >= '2024-01-01' AND \"Forecast_Timestamp\" < '2024-01-02' ORDER BY \"_id\" LIMIT 6"
+ }
+}

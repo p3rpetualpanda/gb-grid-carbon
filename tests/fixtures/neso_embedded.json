@@ -1,0 +1,133 @@
+{
+ "help": "https://api.neso.energy/api/3/action/help_show?name=datastore_search_sql",
+ "success": true,
+ "result": {
+  "records": [
+   {
+    "DATE_GMT": "2024-01-02T00:00:00",
+    "EMBEDDED_WIND_FORECAST": 3530,
+    "Forecast_Datetime": "2024-01-01T21:12:00",
+    "EMBEDDED_WIND_CAPACITY": 6488,
+    "TIME_GMT": "00:00:00",
+    "_full_text": "'-01':2,11,12,22,23 '-02':3 '0':19 '00':5,6,7,8,9,14,15,26 '12':25 '15905':20 '2024':1,10,21 '3530':17 '48':16 '6488':18 't00':4,13 't21':24",
+    "SETTLEMENT_PERIOD": 48,
+    "SETTLEMENT_DATE": "2024-01-01T00:00:00",
+    "EMBEDDED_SOLAR_FORECAST": 0,
+    "_id": 13122,
+    "EMBEDDED_SOLAR_CAPACITY": 15905
+   },
+   {
+    "DATE_GMT": "2024-01-02T00:00:00",
+    "EMBEDDED_WIND_FORECAST": 3494,
+    "Forecast_Datetime": "2024-01-01T21:12:00",
+    "EMBEDDED_WIND_CAPACITY": 6488,
+    "TIME_GMT": "00:30:00",
+    "_full_text": "'-01':2,11,22,23 '-02':3,12 '0':19 '00':5,6,7,9,14,15,26 '1':16 '12':25 '15907':20 '2024':1,10,21 '30':8 '3494':17 '6488':18 't00':4,13 't21':24",
+    "SETTLEMENT_PERIOD": 1,
+    "SETTLEMENT_DATE": "2024-01-02T00:00:00",
+    "EMBEDDED_SOLAR_FORECAST": 0,
+    "_id": 13123,
+    "EMBEDDED_SOLAR_CAPACITY": 15907
+   },
+   {
+    "DATE_GMT": "2024-01-02T00:00:00",
+    "EMBEDDED_WIND_FORECAST": 3457,
+    "Forecast_Datetime": "2024-01-01T21:12:00",
+    "EMBEDDED_WIND_CAPACITY": 6488,
+    "TIME_GMT": "01:00:00",
+    "_full_text": "'-01':2,11,22,23 '-02':3,12 '0':19 '00':5,6,8,9,14,15,26 '01':7 '12':25 '15907':20 '2':16 '2024':1,10,21 '3457':17 '6488':18 't00':4,13 't21':24",
+    "SETTLEMENT_PERIOD": 2,
+    "SETTLEMENT_DATE": "2024-01-02T00:00:00",
+    "EMBEDDED_SOLAR_FORECAST": 0,
+    "_id": 13124,
+    "EMBEDDED_SOLAR_CAPACITY": 15907
+   },
+   {
+    "DATE_GMT": "2024-01-02T00:00:00",
+    "EMBEDDED_WIND_FORECAST": 3408,
+    "Forecast_Datetime": "2024-01-01T21:12:00",
+    "EMBEDDED_WIND_CAPACITY": 6488,
+    "TIME_GMT": "01:30:00",
+    "_full_text": "'-01':2,11,22,23 '-02':3,12 '0':19 '00':5,6,9,14,15,26 '01':7 '12':25 '15907':20 '2024':1,10,21 '3':16 '30':8 '3408':17 '6488':18 't00':4,13 't21':24",
+    "SETTLEMENT_PERIOD": 3,
+    "SETTLEMENT_DATE": "2024-01-02T00:00:00",
+    "EMBEDDED_SOLAR_FORECAST": 0,
+    "_id": 13125,
+    "EMBEDDED_SOLAR_CAPACITY": 15907
+   },
+   {
+    "DATE_GMT": "2024-01-02T00:00:00",
+    "EMBEDDED_WIND_FORECAST": 3359,
+    "Forecast_Datetime": "2024-01-01T21:12:00",
+    "EMBEDDED_WIND_CAPACITY": 6488,
+    "TIME_GMT": "02:00:00",
+    "_full_text": "'-01':2,11,22,23 '-02':3,12 '0':19 '00':5,6,8,9,14,15,26 '02':7 '12':25 '15907':20 '2024':1,10,21 '3359':17 '4':16 '6488':18 't00':4,13 't21':24",
+    "SETTLEMENT_PERIOD": 4,
+    "SETTLEMENT_DATE": "2024-01-02T00:00:00",
+    "EMBEDDED_SOLAR_FORECAST": 0,
+    "_id": 13126,
+    "EMBEDDED_SOLAR_CAPACITY": 15907
+   },
+   {
+    "DATE_GMT": "2024-01-02T00:00:00",
+    "EMBEDDED_WIND_FORECAST": 3260,
+    "Forecast_Datetime": "2024-01-01T21:12:00",
+    "EMBEDDED_WIND_CAPACITY": 6488,
+    "TIME_GMT": "02:30:00",
+    "_full_text": "'-01':2,11,22,23 '-02':3,12 '0':19 '00':5,6,9,14,15,26 '02':7 '12':25 '15907':20 '2024':1,10,21 '30':8 '3260':17 '5':16 '6488':18 't00':4,13 't21':24",
+    "SETTLEMENT_PERIOD": 5,
+    "SETTLEMENT_DATE": "2024-01-02T00:00:00",
+    "EMBEDDED_SOLAR_FORECAST": 0,
+    "_id": 13127,
+    "EMBEDDED_SOLAR_CAPACITY": 15907
+   }
+  ],
+  "fields": [
+   {
+    "type": "int4",
+    "id": "_id"
+   },
+   {
+    "type": "tsvector",
+    "id": "_full_text"
+   },
+   {
+    "type": "timestamp",
+    "id": "DATE_GMT"
+   },
+   {
+    "type": "time",
+    "id": "TIME_GMT"
+   },
+   {
+    "type": "timestamp",
+    "id": "SETTLEMENT_DATE"
+   },
+   {
+    "type": "int4",
+    "id": "SETTLEMENT_PERIOD"
+   },
+   {
+    "type": "int4",
+    "id": "EMBEDDED_WIND_FORECAST"
+   },
+   {
+    "type": "int4",
+    "id": "EMBEDDED_WIND_CAPACITY"
+   },
+   {
+    "type": "int4",
+    "id": "EMBEDDED_SOLAR_FORECAST"
+   },
+   {
+    "type": "int4",
+    "id": "EMBEDDED_SOLAR_CAPACITY"
+   },
+   {
+    "type": "timestamp",
+    "id": "Forecast_Datetime"
+   }
+  ],
+  "sql": "SELECT * FROM \"06abd00a-ef6b-488b-9b6d-5e08fdc0c890\" WHERE \"Forecast_Datetime\" >= '2024-01-01T21:00' AND \"Forecast_Datetime\" < '2024-01-01T22:00' AND \"DATE_GMT\" >= '2024-01-01T23:00' ORDER BY \"_id\" LIMIT 6"
+ }
+}

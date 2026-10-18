@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime
 from urllib.parse import parse_qs, urlparse
 
@@ -6,7 +7,8 @@ import responses
 
 from gridcarbon.extract import neso
 
-# Hand-written in the portal's published schema (shortcut: not yet recorded from the live API).
+# Parser tests use responses recorded from the live API (scripts/record_fixtures.py); the
+# fetch tests use small hand-written rows in the same shape.
 
 
 def package(*resources: tuple[str, str, bool]) -> dict:
@@ -19,12 +21,13 @@ def package(*resources: tuple[str, str, bool]) -> dict:
 
 WIND_PACKAGE = package(
     ("wind-hist", "Historic Day Ahead Wind Forecasts", True),
+    # Live layout: the current file holds only the latest forecast, with no Forecast_Timestamp.
     ("wind-now", "Day Ahead Wind Forecast", True),
     ("wind-bmu", "Day Ahead Wind BMU Forecast", True),
     ("wind-csv", "Some CSV", False),
 )
 EMBEDDED_PACKAGE = package(
-    ("emb-now", "Embedded Wind and Solar Forecasts", True),
+    ("emb-now", "Embedded Solar and Wind Forecast", True),  # no Forecast_Datetime
     ("emb-2023", "Embedded Solar and Wind Forecast Archive 2023", True),
     ("emb-2024", "Embedded Solar and Wind Forecast Archive 2024", True),
 )
@@ -49,9 +52,34 @@ def sql_response(records):
     return {"success": True, "result": {"records": records}}
 
 
+# Datastore fields per resource, as datastore_search(limit=0) reports them.
+FIELDS = {
+    "wind-hist": ["Datetime_GMT", "Incentive_forecast", "Capacity", "Forecast_Timestamp"],
+    "wind-now": ["Datetime_GMT", "Incentive_forecast", "Capacity"],
+    "emb-now": ["DATE_GMT", "TIME_GMT", "EMBEDDED_WIND_FORECAST"],
+    "emb-2023": ["DATE_GMT", "TIME_GMT", "EMBEDDED_WIND_FORECAST", "Forecast_Datetime"],
+    "emb-2024": ["DATE_GMT", "TIME_GMT", "EMBEDDED_WIND_FORECAST", "Forecast_Datetime"],
+}
+
+
+def add_fields(fields=FIELDS):
+    def reply(request):
+        rid = parse_qs(urlparse(request.url).query)["resource_id"][0]
+        body = {"result": {"fields": [{"id": f} for f in ["_id", *fields[rid]]]}}
+        return 200, {}, json.dumps(body)
+
+    responses.add_callback(responses.GET, f"{neso.API_URL}/datastore_search", callback=reply)
+
+
+def sql_queries() -> list[str]:
+    sqls = [parse_qs(urlparse(c.request.url).query).get("sql", [""])[0] for c in responses.calls]
+    return [s for s in sqls if s]
+
+
 @pytest.fixture(autouse=True)
 def fresh_cache():
     neso._resource_cache.clear()
+    neso._fields_cache.clear()
 
 
 def test_parse_wind_keeps_window_and_horizon():
@@ -81,27 +109,45 @@ def test_parse_wind_rejects_off_grid_targets():
         )
 
 
-def test_parse_embedded_builds_target_from_date_and_time():
+def test_parse_wind_recorded_response(fixture_json):
+    records = fixture_json("neso_wind.json")["result"]["records"]
+    df = neso.parse_wind(records, utc(2024, 1, 1), utc(2024, 1, 2))
+    assert len(df) == len(records) == 6
+    # Datetime_GMT is the start of the half hour; numerics arrive as strings from SQL.
+    assert df.loc[0, "issued_at"] == utc(2024, 1, 1, 8, 49, 23)
+    assert df.loc[0, "period_from"] == utc(2024, 1, 2)
+    assert df.loc[0, "forecast_mw"] == 13053.0
+    assert df["capacity_mw"].dtype == "float64"
+
+
+def test_parse_embedded_recorded_response_uses_period_end(fixture_json):
+    records = fixture_json("neso_embedded.json")["result"]["records"]
+    df = neso.parse_embedded(records, utc(2024, 1, 1), utc(2024, 1, 2))
+    assert len(df) == 6
+    # TIME_GMT 00:00 on 2 Jan is settlement period 48 of 1 Jan: the half hour from 23:30.
+    assert df.loc[0, "period_from"] == utc(2024, 1, 1, 23, 30)
+    assert df.loc[1, "period_from"] == utc(2024, 1, 2)
+    assert df.loc[0, "issued_at"] == utc(2024, 1, 1, 21, 12)
+    assert df.loc[0, "wind_mw"] == 3530.0
+
+
+def test_parse_embedded_accepts_short_time_format():
     df = neso.parse_embedded(
         [
             {
-                "Forecast_Datetime": "2024-03-01T08:30:00",
-                "DATE_GMT": "2024-03-01T00:00:00",
-                "TIME_GMT": "13:30",
-                "SETTLEMENT_DATE": "2024-03-01T00:00:00",
-                "SETTLEMENT_PERIOD": 28,
-                "EMBEDDED_WIND_FORECAST": 1200,
-                "EMBEDDED_WIND_CAPACITY": 6500,
-                "EMBEDDED_SOLAR_FORECAST": 4100,
-                "EMBEDDED_SOLAR_CAPACITY": 17000,
+                "Forecast_Datetime": "2026-07-05T07:58:52",
+                "DATE_GMT": "2026-07-05T00:00:00",
+                "TIME_GMT": "16:00",
+                "EMBEDDED_WIND_FORECAST": 1320,
+                "EMBEDDED_WIND_CAPACITY": 6417,
+                "EMBEDDED_SOLAR_FORECAST": 7648,
+                "EMBEDDED_SOLAR_CAPACITY": 22126,
             }
         ],
-        utc(2024, 3, 1),
-        utc(2024, 3, 2),
+        utc(2026, 7, 5),
+        utc(2026, 7, 6),
     )
-    assert df.loc[0, "period_from"] == utc(2024, 3, 1, 13, 30)
-    assert df.loc[0, "issued_at"] == utc(2024, 3, 1, 8, 30)
-    assert df.loc[0, "solar_mw"] == 4100.0
+    assert df.loc[0, "period_from"] == utc(2026, 7, 5, 15, 30)
 
 
 def test_empty_responses_give_empty_frames():
@@ -110,28 +156,38 @@ def test_empty_responses_give_empty_frames():
 
 
 @responses.activate
-def test_fetch_wind_skips_bmu_files_and_dedupes_overlapping_resources(client):
+def test_fetch_wind_queries_only_the_archive(client):
     responses.add(responses.GET, f"{neso.API_URL}/package_show", json=WIND_PACKAGE)
-    same = wind_record("2024-01-01T09:00:00Z", "2024-01-02T00:00:00", 5000)
-    responses.add(responses.GET, f"{neso.API_URL}/datastore_search_sql", json=sql_response([same]))
-    responses.add(responses.GET, f"{neso.API_URL}/datastore_search_sql", json=sql_response([same]))
+    add_fields()
+    rec = wind_record("2024-01-01T09:00:00Z", "2024-01-02T00:00:00", 5000)
+    responses.add(responses.GET, f"{neso.API_URL}/datastore_search_sql", json=sql_response([rec]))
     df = neso.fetch_wind_forecast(client, utc(2024, 1, 1), utc(2024, 1, 2))
-    sqls = [parse_qs(urlparse(c.request.url).query).get("sql", [""])[0] for c in responses.calls]
-    queried = [s for s in sqls if s]
-    assert len(queried) == 2
-    assert not any("wind-bmu" in s for s in queried)
+    queried = sql_queries()
+    assert len(queried) == 1
+    assert '"wind-hist"' in queried[0]
     assert "\"Forecast_Timestamp\" >= '2024-01-01T00:00:00'" in queried[0]
+    assert "interval '4 days'" in queried[0]
     assert len(df) == 1
+
+
+@responses.activate
+def test_fetch_fails_when_no_resource_has_vintages(client):
+    responses.add(responses.GET, f"{neso.API_URL}/package_show", json=WIND_PACKAGE)
+    add_fields(FIELDS | {"wind-hist": ["Datetime_GMT"]})
+    with pytest.raises(ValueError, match="Forecast_Timestamp"):
+        neso.fetch_wind_forecast(client, utc(2024, 1, 1), utc(2024, 1, 2))
 
 
 @responses.activate
 def test_fetch_embedded_queries_only_overlapping_years(client):
     responses.add(responses.GET, f"{neso.API_URL}/package_show", json=EMBEDDED_PACKAGE)
+    add_fields()
     responses.add(responses.GET, f"{neso.API_URL}/datastore_search_sql", json=sql_response([]))
     neso.fetch_embedded_forecast(client, utc(2024, 6, 1), utc(2024, 6, 4))
-    sqls = " ".join(c.request.url for c in responses.calls)
-    assert "emb-2024" in sqls and "emb-now" in sqls
+    sqls = " ".join(sql_queries())
+    assert "emb-2024" in sqls
     assert "emb-2023" not in sqls
+    assert "emb-now" not in sqls  # current file: no Forecast_Datetime
 
 
 @responses.activate
