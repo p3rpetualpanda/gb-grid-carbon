@@ -7,21 +7,22 @@
 > **When is the cleanest time to use electricity in Great Britain, what drives it, and can we
 > predict it?**
 
-An automated pipeline that collects half-hourly GB grid carbon intensity, generation mix and
-weather every few hours, models and tests it with dbt, forecasts the next 48 hours with LightGBM,
-scores that forecast live against the official one, and serves a Streamlit dashboard. About 2.6M
+An automated pipeline that collects half-hourly GB grid carbon intensity, generation mix,
+weather and NESO's wind and solar forecasts every few hours, models and tests it with dbt,
+forecasts the next 48 hours with LightGBM, scores that forecast live against the official one, and serves a Streamlit dashboard. About 2.6M
 rows since 2017, all on free tiers.
 
 ```mermaid
 flowchart LR
   A[Carbon Intensity API] --> E[Python extractors<br/>validate · retry · chunk]
   B[Open-Meteo weather] --> E
+  C[NESO Data Portal<br/>wind + solar forecasts] --> E
   E -->|idempotent upserts| R[(MotherDuck<br/>raw + meta)]
-  R --> D[dbt models<br/>+ 25 data tests]
+  R --> D[dbt models<br/>+ 24 data tests]
   D --> F[48h LightGBM forecast]
   F --> D
   D --> S[Streamlit dashboard]
-  G[GitHub Actions] -->|hourly| E
+  G[GitHub Actions<br/>hourly + external trigger] --> E
 ```
 
 ## Key findings
@@ -53,6 +54,18 @@ actual" at every lead time. NESO's published forecast scores <!-- bt:neso_mae --
 forecast-not-observed weather, train-before-test) are enforced by tests. Details:
 [`docs/backtest.md`](docs/backtest.md).
 
+**Next model (candidate).** Adding NESO's own day-ahead wind and embedded wind/solar forecasts as
+inputs (always the vintage published before each forecast) cuts the backtest MAE to **21.0**, and
+it wins at every lead time. It is not the live model yet.
+
+## The dashboard
+
+[Live on Streamlit](https://gb-grid-carbon-b8k4zy3yzvfzqzxewxzdsk.streamlit.app/). The **Now** tab
+shows the latest intensity, the next 48 h forecast with a band of its typical live error, NESO's
+wind and solar outlook, and what is powering the grid (latest half-hour and the last 7 days).
+Other tabs: a "when should I run it?" planner, a month × hour heatmap, trends since 2017, regions,
+and the live forecast track record against NESO.
+
 ## Engineering highlights
 
 Found by running against the real APIs, not by unit tests (full write-up in
@@ -78,6 +91,11 @@ Found by running against the real APIs, not by unit tests (full write-up in
   every half-hour), plus the model under-weighting the latest actual at very short leads. A
   persistence blend was tuned on half the backtest and checked on the other half: 0–2 h error
   fell from 19.1 to 17.0.
+- **GitHub skipped half the scheduled runs.** At "every 2 hours", GitHub started only 12 of 26
+  scheduled runs over 16–18 Oct (median gap 4.4 h). The schedule now asks hourly, and an external
+  scheduler (cron-job.org) calls the workflow-dispatch API every 2 hours with a token scoped to
+  this repo's Actions only. Overlapping runs are blocked and loads are idempotent, so extra runs
+  are harmless.
 
 ## Status
 
@@ -87,11 +105,12 @@ Found by running against the real APIs, not by unit tests (full write-up in
 | 2 | Live API exploration → `docs/data_dictionary.md` | ✅ Done |
 | 3 | Extraction + idempotent loading + backfill (48 offline tests; ~2.3M rows since 2017) | ✅ Done |
 | 4 | MotherDuck cloud warehouse (same code, `DB_TARGET=motherduck`) | ✅ Done |
-| 5 | dbt models (staging → marts) + 25 data tests | ✅ Done |
+| 5 | dbt models (staging → marts) + 24 data tests | ✅ Done |
 | 6 | Scheduled GitHub Actions pipeline (hourly) + dbt docs site | ✅ Live |
 | 7 | Analysis & findings → [`docs/findings.md`](docs/findings.md) | ✅ Done |
 | 8 | 48h forecast, backtest, live scoring vs NESO → [`docs/backtest.md`](docs/backtest.md) | ✅ Live |
 | 9 | Streamlit dashboard (`app/streamlit_app.py`) → [live](https://gb-grid-carbon-b8k4zy3yzvfzqzxewxzdsk.streamlit.app/) | ✅ Live |
+| 10 | NESO wind/solar forecasts loaded and backtested as model inputs (MAE 26.8 → 21.0) | 🔬 Candidate |
 
 Full plan: [`docs/project_plan.md`](docs/project_plan.md). Decisions and surprises:
 [`docs/dev_log.md`](docs/dev_log.md). CV bullets and interview notes:
@@ -143,7 +162,8 @@ Main table: `marts.fct_grid_halfhourly`, one row per half-hour on a complete tim
 intensity, generation mix, weather and UK local-time calendar.
 
 Datasets: `intensity`, `generation`, `regional` (opt-in for backfill: ~800 MB of JSON),
-`weather_observed`, `weather_historical_forecast`.
+`weather_observed`, `weather_historical_forecast`, `neso_wind_forecast`, `neso_embedded_forecast`
+(every forecast vintage from 2022; the embedded one is ~6M rows).
 
 ## Engineering notes
 
@@ -165,5 +185,7 @@ Datasets: `intensity`, `generation`, `regional` (opt-in for backfill: ~800 MB of
 
 - Carbon Intensity API, National Energy System Operator (NESO): CC BY 4.0.
 - Weather data by [Open-Meteo.com](https://open-meteo.com/), CC BY 4.0 (non-commercial use).
+- Wind and solar forecasts from the [NESO Data Portal](https://www.neso.energy/data-portal):
+  NESO Open Data Licence.
 
 See [`docs/data_dictionary.md`](docs/data_dictionary.md) for every field, limit and quirk.

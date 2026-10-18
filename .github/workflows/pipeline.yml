@@ -4,6 +4,7 @@ name: pipeline
 # 4.4 h over 16-18 Oct), so ask hourly to get closer to every 2 h. Each run:
 # extract + load (incremental, with forecast snapshots) into MotherDuck,
 # check source freshness, rebuild and test the dbt models, and publish dbt docs to Pages.
+# cron-job.org also triggers it every 2 h via the workflow_dispatch API (token: Actions only).
 # GitHub disables schedules in public repos after 60 days without commits: re-enable from
 # the Actions tab if that happens.
 on:
