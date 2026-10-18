@@ -55,3 +55,12 @@ def test_typical_error_follows_the_forecast_shown_and_its_lead_band():
     # NESO's error where NESO is shown (lead <= 12 with a value), ours otherwise.
     assert out.tolist() == [2.0, 5.0, 6.0, 8.0] and out.index.equals(IDX[:4])
     assert app.typical_error(issue, scored.iloc[:0]).isna().all()  # no track record yet
+
+
+def test_rows_or_empty_survives_a_table_dbt_has_not_built_yet():
+    import duckdb
+
+    con = duckdb.connect()
+    assert app.rows_or_empty(lambda sql: con.sql(sql).df(), "select * from nope").empty
+    with pytest.raises(duckdb.ParserException):  # other errors still surface
+        app.rows_or_empty(lambda sql: con.sql(sql).df(), "selec 1")
