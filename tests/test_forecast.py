@@ -66,7 +66,7 @@ def test_training_issues_cover_every_half_hour_of_the_day():
 def test_backtest_trains_only_on_the_past(monkeypatch):
     seen = []
 
-    def fake_fit(rows):
+    def fake_fit(rows, feature_cols=fc.FEATURES):
         seen.append(rows["period_from"].max())
 
         class M:
@@ -93,3 +93,54 @@ def test_model_learns_a_daily_pattern():
     test = fc.features(grid, wx, pd.DatetimeIndex([START + pd.Timedelta(days=55)]), set())
     mae = np.abs(model.predict(test[fc.FEATURES]) - test["y"]).mean()
     assert mae < 10
+
+
+def vintages(issued_at, period_from, value):
+    return pd.DataFrame(
+        {
+            "issued_at": pd.to_datetime(issued_at, utc=True),
+            "period_from": pd.to_datetime(period_from, utc=True),
+            "neso_wind_mw": value,
+        }
+    )
+
+
+def test_neso_features_use_only_vintages_made_before_issue_minus_lag():
+    grid = spine(20)
+    issue = START + pd.Timedelta(days=10)
+    target = issue + pd.Timedelta(hours=5)
+    neso = vintages(
+        [issue - pd.Timedelta(hours=6), issue - fc.NESO_LAG, issue - pd.Timedelta(minutes=10)],
+        [target] * 3,
+        [1.0, 2.0, 3.0],  # 3.0 was made inside the publication lag: not yet known at issue
+    )
+    rows = fc.features(grid, hourly_weather(20), pd.DatetimeIndex([issue]), set(), [neso])
+    by_target = rows.set_index("period_from")
+    assert by_target.loc[target, "neso_wind_mw"] == 2.0
+    # Targets no vintage covers stay missing (LightGBM handles NaN), never borrowed from others.
+    assert by_target["neso_wind_mw"].drop(target).isna().all()
+    assert rows["neso_embedded_solar_mw"].isna().all()
+
+
+def test_neso_features_are_missing_without_neso_data():
+    grid = spine(20)
+    issue = pd.DatetimeIndex([START + pd.Timedelta(days=10)])
+    rows = fc.features(grid, hourly_weather(20), issue, set())
+    assert rows[fc.NESO_FEATURES].isna().all().all()
+
+
+def test_backtest_scores_every_variant_on_the_same_rows(monkeypatch):
+    def fake_fit(rows, feature_cols=fc.FEATURES):
+        class M:
+            def predict(self, X):
+                return np.full(len(X), float(len(feature_cols)))
+
+        return M()
+
+    monkeypatch.setattr(fc, "fit", fake_fit)
+    grid = spine(120)
+    variants = {"model": fc.FEATURES, "model_neso": fc.FEATURES + fc.NESO_FEATURES}
+    preds = fc.backtest(grid, hourly_weather(120), set(), months=1, variants=variants)
+    far = preds[preds["lead"] == fc.HORIZON]  # blend weight ~0: the raw model output
+    assert far["model"].round(2).eq(len(fc.FEATURES)).all()
+    assert far["model_neso"].round(2).eq(len(fc.FEATURES) + 3).all()

@@ -35,6 +35,8 @@ STATUS_TABLES = {
     "raw.weather_historical_forecast": "time",
     "raw.official_forecast_snapshots": "issued_at",
     "raw.weather_forecast_snapshots": "issued_at",
+    "raw.neso_wind_forecast": "issued_at",
+    "raw.neso_embedded_forecast": "issued_at",
     "ml.model_forecasts": "issued_at",
 }
 
