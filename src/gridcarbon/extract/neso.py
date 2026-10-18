@@ -4,6 +4,8 @@ Two datasets, both half-hourly and both stamped with when each forecast was made
 can use exactly the forecast that existed at issue time:
 - Day-ahead wind forecast for transmission-connected wind (historic archive from 2018).
 - 0-14 day embedded (distribution-connected) wind and solar forecasts (yearly archives from 2019).
+A third, the 14-day transmission wind forecast, keeps only its latest vintage: it is snapshotted
+each pipeline run instead (fetch_wind_14d_forecast).
 
 Rows are pulled with `datastore_search_sql`, filtered on the forecast's own timestamp, so the
 window-by-window backfill works on *issue* time. Only targets up to MAX_AHEAD after issue are
@@ -32,6 +34,7 @@ from gridcarbon.timeutils import ensure_utc
 API_URL = "https://api.neso.energy/api/3/action"
 WIND_PACKAGE = "day-ahead-wind-forecast"
 EMBEDDED_PACKAGE = "embedded-wind-and-solar-forecasts"
+WIND_14D_PACKAGE = "14-days-ahead-wind-forecasts"
 
 # Weather training data (Open-Meteo historical forecasts) starts in 2022, so earlier vintages
 # could never be used as model inputs.
@@ -209,3 +212,32 @@ def fetch_embedded_forecast(client: ApiClient, start: datetime, end: datetime) -
         for row in _sql_rows(client, rid, "Forecast_Datetime", start, end, "DATE_GMT")
     ]
     return parse_embedded(records, start, end)
+
+
+def parse_wind_14d(records: list[dict]) -> pd.DataFrame:
+    """The 14-day wind file: one vintage (ForecastDateTime), Datetime is the half-hour start; both
+    UTC (checked against settlement periods across the October clock change)."""
+    if not records:
+        return pd.DataFrame(columns=WIND_COLUMNS)
+    raw = pd.DataFrame(records)
+    df = pd.DataFrame(
+        {
+            "issued_at": _utc(raw["ForecastDateTime"]),
+            "period_from": _utc(raw["Datetime"]),
+            "forecast_mw": raw["Wind_Forecast"],
+            "capacity_mw": raw["Capacity"],
+        }
+    )
+    issued = df["issued_at"]
+    return _finish(df, WIND_COLUMNS, issued.min(), issued.max() + timedelta(seconds=1))
+
+
+def fetch_wind_14d_forecast(client: ApiClient) -> pd.DataFrame:
+    """NESO's latest 14-day transmission wind forecast. Only the latest is kept upstream (no
+    archive), so the pipeline snapshots it every run, like the official intensity forecast."""
+    ids = [r["id"] for r in _resources(client, WIND_14D_PACKAGE) if "bmu" not in r["name"].lower()]
+    if len(ids) != 1:
+        raise ValueError(f"expected one national 14-day wind resource, found {len(ids)}")
+    sql = f'SELECT * FROM "{ids[0]}" ORDER BY "Datetime" LIMIT {PAGE_SIZE}'
+    records = client.get_json(f"{API_URL}/datastore_search_sql", {"sql": sql})["result"]["records"]
+    return parse_wind_14d(records)

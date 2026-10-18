@@ -1,0 +1,103 @@
+{
+ "help": "https://api.neso.energy/api/3/action/help_show?name=datastore_search_sql",
+ "success": true,
+ "result": {
+  "records": [
+   {
+    "Capacity": 25502,
+    "_full_text": "'-10':2,8,14 '-18':3,9,15 '00':6,18 '2026':1,7,13 '25502':11 '30':5,17 '34':10 '8485':12 't15':4 't16':16",
+    "Settlement_Period": 34,
+    "Datetime": "2026-10-18T15:30:00",
+    "ForecastDateTime": "2026-10-18T16:30:00",
+    "Wind_Forecast": 8485,
+    "Date": "2026-10-18",
+    "_id": 1
+   },
+   {
+    "Capacity": 25502,
+    "_full_text": "'-10':2,8,14 '-18':3,9,15 '00':5,6,18 '2026':1,7,13 '25502':11 '30':17 '35':10 '8671':12 't16':4,16",
+    "Settlement_Period": 35,
+    "Datetime": "2026-10-18T16:00:00",
+    "ForecastDateTime": "2026-10-18T16:30:00",
+    "Wind_Forecast": 8671,
+    "Date": "2026-10-18",
+    "_id": 2
+   },
+   {
+    "Capacity": 25502,
+    "_full_text": "'-10':2,8,14 '-18':3,9,15 '00':6,18 '2026':1,7,13 '25502':11 '30':5,17 '36':10 '8895':12 't16':4,16",
+    "Settlement_Period": 36,
+    "Datetime": "2026-10-18T16:30:00",
+    "ForecastDateTime": "2026-10-18T16:30:00",
+    "Wind_Forecast": 8895,
+    "Date": "2026-10-18",
+    "_id": 3
+   },
+   {
+    "Capacity": 25502,
+    "_full_text": "'-10':2,8,14 '-18':3,9,15 '00':5,6,18 '2026':1,7,13 '25502':11 '30':17 '37':10 '8982':12 't16':16 't17':4",
+    "Settlement_Period": 37,
+    "Datetime": "2026-10-18T17:00:00",
+    "ForecastDateTime": "2026-10-18T16:30:00",
+    "Wind_Forecast": 8982,
+    "Date": "2026-10-18",
+    "_id": 4
+   },
+   {
+    "Capacity": 25502,
+    "_full_text": "'-10':2,8,14 '-18':3,9,15 '00':6,18 '2026':1,7,13 '25502':11 '30':5,17 '38':10 '9002':12 't16':16 't17':4",
+    "Settlement_Period": 38,
+    "Datetime": "2026-10-18T17:30:00",
+    "ForecastDateTime": "2026-10-18T16:30:00",
+    "Wind_Forecast": 9002,
+    "Date": "2026-10-18",
+    "_id": 5
+   },
+   {
+    "Capacity": 25502,
+    "_full_text": "'-10':2,8,14 '-18':3,9,15 '00':5,6,18 '2026':1,7,13 '25502':11 '30':17 '39':10 '9017':12 't16':16 't18':4",
+    "Settlement_Period": 39,
+    "Datetime": "2026-10-18T18:00:00",
+    "ForecastDateTime": "2026-10-18T16:30:00",
+    "Wind_Forecast": 9017,
+    "Date": "2026-10-18",
+    "_id": 6
+   }
+  ],
+  "fields": [
+   {
+    "type": "int4",
+    "id": "_id"
+   },
+   {
+    "type": "tsvector",
+    "id": "_full_text"
+   },
+   {
+    "type": "timestamp",
+    "id": "Datetime"
+   },
+   {
+    "type": "date",
+    "id": "Date"
+   },
+   {
+    "type": "int4",
+    "id": "Settlement_Period"
+   },
+   {
+    "type": "int4",
+    "id": "Capacity"
+   },
+   {
+    "type": "int4",
+    "id": "Wind_Forecast"
+   },
+   {
+    "type": "timestamp",
+    "id": "ForecastDateTime"
+   }
+  ],
+  "sql": "SELECT * FROM \"93c3048e-1dab-4057-a2a9-417540583929\" ORDER BY \"Datetime\" LIMIT 6"
+ }
+}

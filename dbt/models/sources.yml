@@ -39,6 +39,8 @@ sources:
           freshness:
             warn_after: {count: 30, period: hour}
             error_after: {count: 72, period: hour}
+      - name: neso_wind_14d_snapshots
+        description: NESO 14-day transmission wind forecast as captured at each pipeline run.
       - name: neso_embedded_forecast
         description: NESO embedded (local network) wind and solar forecasts, every vintage.
 

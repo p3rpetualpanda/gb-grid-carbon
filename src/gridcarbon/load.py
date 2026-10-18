@@ -52,6 +52,9 @@ DDL: dict[str, str] = {
     "raw.neso_wind_forecast": f"""
         issued_at TIMESTAMPTZ NOT NULL, period_from TIMESTAMPTZ NOT NULL,
         forecast_mw DOUBLE, capacity_mw DOUBLE, {_LINEAGE}""",
+    "raw.neso_wind_14d_snapshots": f"""
+        issued_at TIMESTAMPTZ NOT NULL, period_from TIMESTAMPTZ NOT NULL,
+        forecast_mw DOUBLE, capacity_mw DOUBLE, {_LINEAGE}""",
     "raw.neso_embedded_forecast": f"""
         issued_at TIMESTAMPTZ NOT NULL, period_from TIMESTAMPTZ NOT NULL, wind_mw DOUBLE,
         wind_capacity_mw DOUBLE, solar_mw DOUBLE, solar_capacity_mw DOUBLE, {_LINEAGE}""",

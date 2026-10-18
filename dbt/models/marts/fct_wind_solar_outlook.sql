@@ -1,12 +1,19 @@
 -- NESO's newest wind and solar forecast for each half-hour (the dashboard's outlook chart).
--- Wind farms on the transmission network come from the day-ahead archive (one vintage a day,
--- covering that day); wind and solar on local networks from the 0-14 day embedded forecast.
+-- Wind farms on the transmission network: the newest of the day-ahead archive (one vintage a
+-- day, covering that day) and the 14-day forecast we snapshot each run (covers the full 48 h).
+-- Wind and solar on local networks come from the 0-14 day embedded forecast.
 with wind as (
     select
         period_from,
         arg_max(forecast_mw, issued_at) as wind_mw,
         max(issued_at) as wind_issued_at
-    from {{ source('raw', 'neso_wind_forecast') }}
+    from (
+        select period_from, forecast_mw, issued_at
+        from {{ source('raw', 'neso_wind_forecast') }}
+        union all
+        select period_from, forecast_mw, issued_at
+        from {{ source('raw', 'neso_wind_14d_snapshots') }}
+    )
     group by period_from
 ),
 

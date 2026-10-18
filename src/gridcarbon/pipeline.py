@@ -147,6 +147,14 @@ def snapshot_forecasts(
         ("issued_at", "time", "point_id"),
         run["run_id"],
     )
+    # Last: a NESO portal failure still fails the run, but after the other snapshots are saved.
+    n += upsert(
+        con,
+        "raw.neso_wind_14d_snapshots",
+        neso.fetch_wind_14d_forecast(client),
+        ("issued_at", "period_from"),
+        run["run_id"],
+    )
     log.info("snapshots: %d rows", n)
     run["rows_loaded"] += n
     return n

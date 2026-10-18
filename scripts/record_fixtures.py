@@ -18,6 +18,7 @@ WEATHER_VARS = "temperature_2m,wind_speed_100m,shortwave_radiation,cloud_cover"
 NESO = "https://api.neso.energy/api/3/action/datastore_search_sql"
 NESO_WIND_ARCHIVE = "7524ec65-f782-4258-aaf8-5b926c17b966"  # Historic Day Ahead Wind Forecasts
 NESO_EMBEDDED_2024 = "06abd00a-ef6b-488b-9b6d-5e08fdc0c890"  # Embedded ... Archive 2024
+NESO_WIND_14D = "93c3048e-1dab-4057-a2a9-417540583929"  # 14 Days Ahead Wind Forecast
 
 REQUESTS: dict[str, tuple[str, dict | None]] = {
     "intensity.json": (f"{CI}/intensity/2024-01-01T00:00Z/2024-01-01T02:00Z", None),
@@ -50,6 +51,11 @@ REQUESTS: dict[str, tuple[str, dict | None]] = {
             "'2024-01-01T21:00' AND \"Forecast_Datetime\" < '2024-01-01T22:00' "
             'AND "DATE_GMT" >= \'2024-01-01T23:00\' ORDER BY "_id" LIMIT 6'
         },
+    ),
+    # The 14-day wind file keeps only its latest forecast; its first rows start before issue.
+    "neso_wind_14d.json": (
+        NESO,
+        {"sql": f'SELECT * FROM "{NESO_WIND_14D}" ORDER BY "Datetime" LIMIT 6'},
     ),
 }
 

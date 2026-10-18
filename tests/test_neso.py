@@ -201,3 +201,36 @@ def test_sql_paginates_until_a_short_page(client, monkeypatch):
     rows = neso._sql_rows(client, "r", "Forecast_Timestamp", utc(2024, 1, 1), utc(2024, 1, 2))
     assert len(rows) == 5
     assert "OFFSET 4" in responses.calls[2].request.url.replace("+", " ").replace("%20", " ")
+
+
+def test_parse_wind_14d_recorded_response_drops_past_targets(fixture_json):
+    records = fixture_json("neso_wind_14d.json")["result"]["records"]
+    df = neso.parse_wind_14d(records)
+    assert df.columns.tolist() == neso.WIND_COLUMNS
+    # Issued 16:30 UTC; the file starts an hour earlier, and only 30 min before issue is kept.
+    assert df["issued_at"].unique().tolist() == [utc(2026, 10, 18, 16, 30)]
+    assert df.loc[0, "period_from"] == utc(2026, 10, 18, 16)
+    assert len(df) == 5
+    assert df.loc[0, "forecast_mw"] == 8671.0 and df["capacity_mw"].dtype == "float64"
+    assert neso.parse_wind_14d([]).empty
+
+
+@responses.activate
+def test_fetch_wind_14d_reads_the_national_file_only(client):
+    pkg = package(("w14", "14 Days Ahead Wind Forecast", True),
+                  ("w14-bmu", "14 Day Ahead Wind BMU Forecast", True))  # fmt: skip
+    responses.add(responses.GET, f"{neso.API_URL}/package_show", json=pkg)
+    rec = {"ForecastDateTime": "2026-10-18T16:30:00", "Datetime": "2026-10-18T17:00:00",
+           "Wind_Forecast": 9000, "Capacity": 25502}  # fmt: skip
+    responses.add(responses.GET, f"{neso.API_URL}/datastore_search_sql", json=sql_response([rec]))
+    df = neso.fetch_wind_14d_forecast(client)
+    queried = sql_queries()
+    assert len(queried) == 1 and '"w14"' in queried[0]
+    assert df.loc[0, "forecast_mw"] == 9000.0
+
+
+@responses.activate
+def test_fetch_wind_14d_fails_if_the_layout_changes(client):
+    responses.add(responses.GET, f"{neso.API_URL}/package_show", json=package())
+    with pytest.raises(ValueError, match="14-day"):
+        neso.fetch_wind_14d_forecast(client)
