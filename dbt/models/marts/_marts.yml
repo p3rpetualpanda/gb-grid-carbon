@@ -44,3 +44,11 @@ models:
     description: >
       Live track record: our forecast and NESO's, issued in the same pipeline run, with absolute
       errors once the actual is published. Grows with every run.
+
+  - name: fct_wind_solar_outlook
+    description: >
+      NESO's newest wind and solar forecast per half-hour (MW): transmission wind farms from the
+      day-ahead archive, wind and solar on local networks from the embedded forecast.
+    columns:
+      - name: period_from
+        data_tests: [unique, not_null]

@@ -33,6 +33,14 @@ sources:
             error_after: {count: 72, period: hour}
       - name: weather_forecast_snapshots
         description: Live weather forecast captured at each pipeline run.
+      - name: neso_wind_forecast
+        description: NESO day-ahead wind forecast (transmission wind farms), every vintage.
+        config:
+          freshness:
+            warn_after: {count: 30, period: hour}
+            error_after: {count: 72, period: hour}
+      - name: neso_embedded_forecast
+        description: NESO embedded (local network) wind and solar forecasts, every vintage.
 
   - name: ml
     description: Model outputs written by `gridcarbon predict` (src/gridcarbon/forecast.py).
