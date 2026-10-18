@@ -49,6 +49,15 @@ def greenest_window(forecast: pd.Series, hours: float) -> tuple[pd.Timestamp, fl
 NESO_LEADS = 12  # NESO beats our model at 0-6 h (live and backtest), so trust it there
 
 
+def rows_or_empty(run, sql: str) -> pd.DataFrame:
+    """Run `sql`, or return no rows if a table it reads doesn't exist yet (a new dbt model goes
+    live with the code, but MotherDuck only has it after the next pipeline run)."""
+    try:
+        return run(sql)
+    except duckdb.CatalogException:
+        return pd.DataFrame()
+
+
 def _shows_neso(issue: pd.DataFrame) -> pd.Series:
     return (issue["lead"] <= NESO_LEADS) & issue["neso_gco2_kwh"].notna()
 
@@ -197,12 +206,15 @@ def main() -> None:
             st.caption("Shaded band: the forecast ± its average live error at that lead time "
                        "(Forecast accuracy tab).")  # fmt: skip
 
-        outlook = q(f"""
+        outlook = rows_or_empty(
+            q,
+            f"""
             select period_from, wind_mw, embedded_wind_mw, embedded_solar_mw
             from marts.fct_wind_solar_outlook
             where period_from between '{forecast.index.min()}' and '{forecast.index.max()}'
             order by period_from
-        """)
+        """,
+        )
         st.subheader("Wind and solar outlook (NESO forecast)")
         if outlook.empty:
             st.info("No NESO wind or solar forecast loaded for the next 48 h yet.")
