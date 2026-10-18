@@ -12,22 +12,23 @@ Features use only data available at issue time: actuals end 1 h before issue (pu
 Open-Meteo's *historical forecast*, never observed weather. These rules are enforced by
 `tests/test_forecast.py`.
 
-**Result.** Over all leads the model's MAE is **26.8 gCO₂/kWh**, vs
-**44.3** for the best naïve baseline (**39%
-better**) and **9.9** for NESO's published forecast. Adding NESO's own
-day-ahead wind and embedded wind/solar forecasts as inputs (the vintage issued before each
-forecast, never a later one) gives **21.0**; it is a candidate, not yet the
-live model.
+**Result.** Over all leads the model's MAE is **20.9 gCO₂/kWh**, vs
+**44.3** for the best naïve baseline (**53%
+better**) and **9.9** for NESO's published forecast. The model uses NESO's own
+embedded wind/solar forecasts as inputs (the vintage issued before each forecast, never a later
+one); without them (the previous model) it scores **26.8**. Also adding
+NESO's transmission wind forecast gives **20.9**, but its archive only
+covers the day each forecast is published, so most 48 h targets lack it and it is left out.
 
 ![MAE by lead](img/backtest_mae_by_lead.png)
 
-|  | Our model (LightGBM) | Our model + NESO wind/solar forecasts | NESO published forecast* | Last known actual | Same slot, last known day | Same slot, last week |
-| --- | --- | --- | --- | --- | --- | --- |
-| 0-6h | 20.7 | 17.9 | 9.9 | 28.9 | 40.1 | 54.3 |
-| 6-12h | 26.1 | 19.9 | 9.9 | 44.2 | 40.1 | 54.4 |
-| 12-24h | 27.1 | 20.7 | 9.9 | 45.3 | 40.8 | 54.4 |
-| 24-48h | 28.4 | 22.2 | 9.9 | 53.9 | 48.1 | 54.4 |
-| all | 26.8 | 21 | 9.9 | 47.4 | 44.3 | 54.4 |
+|  | Our model (LightGBM + NESO embedded wind/solar) | Previous model (no NESO inputs) | + NESO transmission wind | NESO published forecast* | Last known actual | Same slot, last known day | Same slot, last week |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 0-6h | 17.7 | 20.7 | 17.9 | 9.9 | 28.9 | 40.1 | 54.3 |
+| 6-12h | 19.6 | 26.1 | 19.8 | 9.9 | 44.2 | 40.1 | 54.4 |
+| 12-24h | 20.6 | 27 | 20.6 | 9.9 | 45.3 | 40.8 | 54.4 |
+| 24-48h | 22.2 | 28.3 | 22.1 | 9.9 | 53.9 | 48.1 | 54.4 |
+| all | 20.9 | 26.8 | 20.9 | 9.9 | 47.4 | 44.3 | 54.4 |
 
 \* **Read the NESO column with care.** The API only keeps NESO's *final* published forecast for
 each half-hour, not when it was made, so it is likely a short-lead forecast. That makes it a
@@ -42,15 +43,17 @@ at long leads to be somewhat higher than this backtest.
 
 |  | gain_share |
 | --- | --- |
-| wind_speed | 0.36 |
-| lag_day | 0.173 |
-| last_actual | 0.123 |
-| lag_week | 0.076 |
-| month | 0.058 |
-| halfhour_slot | 0.053 |
-| temperature | 0.049 |
-| iso_weekday | 0.046 |
-| solar_radiation | 0.027 |
+| neso_embedded_wind_mw | 0.414 |
+| lag_day | 0.137 |
+| last_actual | 0.08 |
+| halfhour_slot | 0.061 |
+| lag_week | 0.054 |
+| neso_embedded_solar_mw | 0.053 |
+| month | 0.047 |
+| wind_speed | 0.044 |
+| iso_weekday | 0.042 |
+| temperature | 0.037 |
 | mean_24h | 0.02 |
-| lead | 0.01 |
-| is_holiday | 0.005 |
+| is_holiday | 0.004 |
+| lead | 0.004 |
+| solar_radiation | 0.003 |

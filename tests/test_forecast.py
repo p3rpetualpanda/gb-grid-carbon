@@ -139,8 +139,67 @@ def test_backtest_scores_every_variant_on_the_same_rows(monkeypatch):
 
     monkeypatch.setattr(fc, "fit", fake_fit)
     grid = spine(120)
-    variants = {"model": fc.FEATURES, "model_neso": fc.FEATURES + fc.NESO_FEATURES}
+    variants = {"model": fc.BASE_FEATURES, "model_neso": fc.BASE_FEATURES + fc.NESO_FEATURES}
     preds = fc.backtest(grid, hourly_weather(120), set(), months=1, variants=variants)
     far = preds[preds["lead"] == fc.HORIZON]  # blend weight ~0: the raw model output
-    assert far["model"].round(2).eq(len(fc.FEATURES)).all()
-    assert far["model_neso"].round(2).eq(len(fc.FEATURES) + 3).all()
+    assert far["model"].round(2).eq(len(fc.BASE_FEATURES)).all()
+    assert far["model_neso"].round(2).eq(len(fc.BASE_FEATURES) + 3).all()
+
+
+def live_setup(monkeypatch, covered: int):
+    """In-memory warehouse issuing at day 10, with an embedded vintage covering `covered` targets.
+    Returns (con, issue, dict that receives the feature frame the model predicts on)."""
+    import duckdb
+
+    issue = START + pd.Timedelta(days=10)
+    con = duckdb.connect()
+    con.execute("create schema raw")
+    con.execute("create table raw.official_forecast_snapshots (issued_at timestamptz)")
+    con.execute("insert into raw.official_forecast_snapshots values (?)", [issue])
+    con.execute(
+        "create table raw.weather_forecast_snapshots (issued_at timestamptz, time timestamptz, "
+        "point_id varchar, wind_speed_100m double, shortwave_radiation double, "
+        "temperature_2m double)"
+    )
+    targets = pd.date_range(issue, periods=covered, freq="30min")
+    embedded = pd.DataFrame(
+        {
+            "issued_at": issue - pd.Timedelta(hours=1),
+            "period_from": targets,
+            "neso_embedded_wind_mw": 1500.0,
+            "neso_embedded_solar_mw": 200.0,
+        }
+    )
+    monkeypatch.setattr(fc, "load_history", lambda con: (spine(20), hourly_weather(20)))
+    monkeypatch.setattr(fc, "load_neso_forecasts", lambda con: [embedded])
+    seen = {}
+
+    def fake_fit(rows, feature_cols=fc.FEATURES):
+        class M:
+            def predict(self, X):
+                seen["X"] = X
+                return np.zeros(len(X))
+
+        return M()
+
+    monkeypatch.setattr(fc, "fit", fake_fit)
+    return con, issue, seen
+
+
+def test_predict_live_uses_neso_embedded_forecasts(monkeypatch):
+    con, issue, seen = live_setup(monkeypatch, covered=fc.HORIZON)
+    out = fc.predict_live(con, issue.to_pydatetime())
+    assert len(out) == fc.HORIZON
+    assert (out["model_version"] == fc.MODEL_VERSION).all()
+    assert "neso_wind_mw" not in seen["X"]  # transmission wind is mostly missing upstream
+    assert (seen["X"]["neso_embedded_wind_mw"] == 1500.0).all()
+    assert (seen["X"]["neso_embedded_solar_mw"] == 200.0).all()
+
+
+def test_predict_live_falls_back_without_a_full_neso_vintage(monkeypatch):
+    # A stalled NESO feed leaves later targets uncovered: use the model without NESO inputs and
+    # say so in model_version, rather than publish a v3 forecast on inputs it never trained on.
+    con, issue, seen = live_setup(monkeypatch, covered=40)
+    out = fc.predict_live(con, issue.to_pydatetime())
+    assert list(seen["X"].columns) == fc.BASE_FEATURES
+    assert (out["model_version"] == fc.FALLBACK_VERSION).all()

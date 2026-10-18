@@ -22,18 +22,23 @@ ACTUAL_LAG = pd.Timedelta(hours=1)  # actuals publish late: never use the last h
 # half-hour of the day. Live runs issue at any half-hour; a fixed 6 h grid left (lead, slot)
 # combinations unseen and skewed live forecasts.
 ISSUE_EVERY = "390min"
-MODEL_VERSION = "lgbm-direct-v2"
+MODEL_VERSION = "lgbm-direct-v3"
+FALLBACK_VERSION = "lgbm-direct-v2"  # BASE_FEATURES only: used live when NESO inputs are missing
 # Short leads lean on the last known actual: weight exp(-(lead-1)/6). Decay chosen on the first
 # 6 backtest months, checked on the last 6 (0-2 h MAE 19.1 -> 17.0; overall unchanged).
 PERSISTENCE_DECAY = 6
-FEATURES = [
+BASE_FEATURES = [
     "lead", "halfhour_slot", "iso_weekday", "month", "is_holiday",
     "last_actual", "mean_24h", "lag_day", "lag_week",
     "wind_speed", "solar_radiation", "temperature",
 ]  # fmt: skip
-# Candidate inputs from NESO's own forecasts (raw.neso_*), each the latest vintage made at least
-# NESO_LAG before issue. Backtested alongside FEATURES; the live model uses them once they win.
+# Inputs from NESO's own forecasts (raw.neso_*), each the latest vintage made at least NESO_LAG
+# before issue.
 NESO_FEATURES = ["neso_wind_mw", "neso_embedded_wind_mw", "neso_embedded_solar_mw"]
+# The live model (v3) uses the embedded forecasts but not transmission wind: NESO's day-ahead wind
+# archive only covers the day it is published, so most 48 h targets have no vintage. Revisit once
+# raw.neso_wind_14d_snapshots has a few weeks of history.
+FEATURES = BASE_FEATURES + ["neso_embedded_wind_mw", "neso_embedded_solar_mw"]
 NESO_LAG = pd.Timedelta(minutes=30)  # allowance for publication after Forecast_Timestamp
 NESO_SQL = {
     "raw.neso_wind_forecast": "forecast_mw as neso_wind_mw",
@@ -224,7 +229,7 @@ def predict_live(con, now: datetime) -> pd.DataFrame:
     # Issue at the same time as this run's NESO snapshot, so the two forecasts join exactly.
     snap = con.sql("select max(issued_at) from raw.official_forecast_snapshots").fetchone()[0]
     issue = pd.Timestamp(snap if snap is not None else now).tz_convert(UTC).floor("30min")
-    model = fit(training_rows(grid, wx_hist, hols, issue))
+    neso = load_neso_forecasts(con)
     wx_live = (
         con.sql(
             GB_WEATHER_SQL.format(
@@ -236,14 +241,20 @@ def predict_live(con, now: datetime) -> pd.DataFrame:
         .df()
         .set_index("hour_utc")
     )
-    rows = features(grid, wx_live.combine_first(wx_hist), pd.DatetimeIndex([issue]), hols)
+    rows = features(grid, wx_live.combine_first(wx_hist), pd.DatetimeIndex([issue]), hols, neso)
+    # A stalled NESO feed leaves targets uncovered, which training almost never saw: fall back to
+    # the model without NESO inputs, and label it, rather than publish v3 on unfamiliar inputs.
+    cols, version = FEATURES, MODEL_VERSION
+    if rows[FEATURES].drop(columns=BASE_FEATURES).isna().any().any():
+        cols, version = BASE_FEATURES, FALLBACK_VERSION
+    model = fit(training_rows(grid, wx_hist, hols, issue, neso), cols)
     return pd.DataFrame(
         {
             "issued_at": rows["issued_at"],
             "period_from": rows["period_from"],
             "lead": rows["lead"],
-            "yhat": blend(rows, model.predict(rows[FEATURES])),
-            "model_version": MODEL_VERSION,
+            "yhat": blend(rows, model.predict(rows[cols])),
+            "model_version": version,
         }
     )
 

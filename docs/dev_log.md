@@ -125,3 +125,18 @@ ours) against actuals later.
   calls the `workflow_dispatch` API every 2 h with a fine-grained token (Actions read/write on
   this repo only; expires 17 Oct 2027). Overlapping runs are blocked by the concurrency group and
   loads are idempotent, so duplicate triggers are harmless.
+
+## 2026-10-18: NESO-input model goes live (v3)
+
+- **Live model is now `lgbm-direct-v3`**: the v2 features plus NESO's embedded wind and solar
+  forecasts. 12-month backtest MAE 26.8 -> 20.9, better at every lead. The embedded forecast is
+  refreshed every run and reaches about 3 days ahead, so it covers the full 48 h live.
+- **Transmission wind left out.** With it the backtest is also 20.9 (slightly worse at 0-6 h), and
+  its day-ahead archive covers only the day each forecast is published, so live rows would mostly
+  lack it. It can come back from `raw.neso_wind_14d_snapshots` once that has some history.
+- **Fallback if NESO stalls.** A stale vintage leaves later targets uncovered, which training
+  almost never saw. If any live target lacks an embedded value, the run trains on the v2 features
+  instead and labels the forecast `lgbm-direct-v2`, so the track record shows which model ran.
+- **Known gap:** embedded forecasts start in 2019, so 2017-2018 training rows have them missing.
+  LightGBM handles NaN, and the backtest scores the result, but the model could learn "missing
+  means an old year". Restricting training to 2019+ is worth testing.
