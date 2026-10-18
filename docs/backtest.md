@@ -13,18 +13,21 @@ Open-Meteo's *historical forecast*, never observed weather. These rules are enfo
 `tests/test_forecast.py`.
 
 **Result.** Over all leads the model's MAE is **26.8 gCO₂/kWh**, vs
-**44.3** for the best naïve baseline (**40%
-better**) and **9.9** for NESO's published forecast.
+**44.3** for the best naïve baseline (**39%
+better**) and **9.9** for NESO's published forecast. Adding NESO's own
+day-ahead wind and embedded wind/solar forecasts as inputs (the vintage issued before each
+forecast, never a later one) gives **21.0**; it is a candidate, not yet the
+live model.
 
 ![MAE by lead](img/backtest_mae_by_lead.png)
 
-|  | Our model (LightGBM) | NESO published forecast* | Last known actual | Same slot, last known day | Same slot, last week |
-| --- | --- | --- | --- | --- | --- |
-| 0-6h | 20.7 | 9.9 | 28.9 | 40.1 | 54.3 |
-| 6-12h | 26.1 | 9.9 | 44.2 | 40.1 | 54.4 |
-| 12-24h | 27 | 9.9 | 45.3 | 40.8 | 54.4 |
-| 24-48h | 28.3 | 9.9 | 53.9 | 48.1 | 54.4 |
-| all | 26.8 | 9.9 | 47.4 | 44.3 | 54.4 |
+|  | Our model (LightGBM) | Our model + NESO wind/solar forecasts | NESO published forecast* | Last known actual | Same slot, last known day | Same slot, last week |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0-6h | 20.7 | 17.9 | 9.9 | 28.9 | 40.1 | 54.3 |
+| 6-12h | 26.1 | 19.9 | 9.9 | 44.2 | 40.1 | 54.4 |
+| 12-24h | 27.1 | 20.7 | 9.9 | 45.3 | 40.8 | 54.4 |
+| 24-48h | 28.4 | 22.2 | 9.9 | 53.9 | 48.1 | 54.4 |
+| all | 26.8 | 21 | 9.9 | 47.4 | 44.3 | 54.4 |
 
 \* **Read the NESO column with care.** The API only keeps NESO's *final* published forecast for
 each half-hour, not when it was made, so it is likely a short-lead forecast. That makes it a

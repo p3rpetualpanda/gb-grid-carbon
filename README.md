@@ -45,8 +45,8 @@ From [`docs/findings.md`](docs/findings.md) (every number computed by `analysis/
 ## The forecast
 
 A direct multi-horizon LightGBM model predicts all 96 half-hours of the next 48 h. Over a 12-month
-rolling-origin backtest (last run <!-- bt:run_date -->2026-10-12<!-- /bt -->) its MAE is **<!-- bt:model_mae -->26.8<!-- /bt --> gCO₂/kWh**,
-**<!-- bt:improvement -->40%<!-- /bt --> better** than the best naïve baseline (<!-- bt:best_baseline_mae -->44.3<!-- /bt -->), and it beats "repeat the last
+rolling-origin backtest (last run <!-- bt:run_date -->2026-10-18<!-- /bt -->) its MAE is **<!-- bt:model_mae -->26.8<!-- /bt --> gCO₂/kWh**,
+**<!-- bt:improvement -->39%<!-- /bt --> better** than the best naïve baseline (<!-- bt:best_baseline_mae -->44.3<!-- /bt -->), and it beats "repeat the last
 actual" at every lead time. NESO's published forecast scores <!-- bt:neso_mae -->9.9<!-- /bt -->, but the API keeps only NESO's *final*, short-lead forecast, so the fair comparison is the
 **live track record**: both forecasts issued in the same pipeline run, scored when actuals arrive
 (`marts.fct_model_vs_official`, shown in the dashboard). Leakage rules (publication lag,

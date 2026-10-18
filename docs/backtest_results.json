@@ -1,9 +1,9 @@
 {
-  "run_date": "2026-10-12",
+  "run_date": "2026-10-18",
   "forecasts": 1348,
   "predictions": 129408,
   "model_mae": 26.8,
   "best_baseline_mae": 44.3,
-  "improvement": 0.395,
+  "improvement": 0.394,
   "neso_mae": 9.9
 }
