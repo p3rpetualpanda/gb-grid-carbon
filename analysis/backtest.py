@@ -44,22 +44,29 @@ con = connect(Settings(db_target="local"))
 grid, wx = fc.load_history(con)
 hols = fc.holidays()
 neso = fc.load_neso_forecasts(con)
-# The live model ("model") plus a candidate that adds NESO's own wind/solar forecasts as inputs.
-variants = {"model": fc.FEATURES, "model_neso": fc.FEATURES + fc.NESO_FEATURES}
+# The live model (v3: + NESO embedded wind/solar), the previous one (v2: no NESO inputs) and one
+# that also adds NESO's transmission wind forecast, all trained and scored on the same folds.
+variants = {
+    "model": fc.FEATURES,
+    "model_v2": fc.BASE_FEATURES,
+    "model_neso_wind": fc.BASE_FEATURES + fc.NESO_FEATURES,
+}
 preds = fc.backtest(grid, wx, hols, months=12, neso=neso, variants=variants)
-methods = {"model": "Our model (LightGBM)", "model_neso": "Our model + NESO wind/solar forecasts",
+methods = {"model": "Our model (LightGBM + NESO embedded wind/solar)",
+           "model_v2": "Previous model (no NESO inputs)",
+           "model_neso_wind": "+ NESO transmission wind",
            "neso": "NESO published forecast*",
            "last_actual": "Last known actual",
            "lag_day": "Same slot, last known day", "lag_week": "Same slot, last week"}  # fmt: skip
 table = fc.mae_by_lead(preds, list(methods))
 
-# Chart: MAE by lead band, one line per method (4 series: legend + direct labels).
+# Chart: MAE by lead band, one line per method (legend + direct labels).
 bands = [b for b in table.index if b != "all"]
-fig, ax = plt.subplots(figsize=(8, 4.2), dpi=150)
+fig, ax = plt.subplots(figsize=(8, 5.2), dpi=150)
 fig.patch.set_facecolor(SURFACE)
 ax.set_facecolor(SURFACE)
 for (col, label), colour in zip(
-    methods.items(), (BLUE, VIOLET, ORANGE, AQUA, YELLOW, MAGENTA), strict=True
+    methods.items(), (BLUE, MUTED, VIOLET, ORANGE, AQUA, YELLOW, MAGENTA), strict=True
 ):
     ax.plot(bands, table.loc[bands, col], color=colour, linewidth=2, marker="o", markersize=5,
             label=label)  # fmt: skip
@@ -74,13 +81,13 @@ ax.set_axisbelow(True)
 for side in ("top", "right", "left"):
     ax.spines[side].set_visible(False)
 ax.spines["bottom"].set_color(AXIS)
-ax.legend(frameon=False, labelcolor=INK2, loc="upper left")
+ax.legend(frameon=False, labelcolor=INK2, loc="upper center", bbox_to_anchor=(0.5, -0.18), ncol=2)
 fig.tight_layout()
 (ROOT / "docs" / "img").mkdir(parents=True, exist_ok=True)
 fig.savefig(ROOT / "docs" / "img" / "backtest_mae_by_lead.png", facecolor=SURFACE)
 
 # Feature importance from a model trained on everything (gain = total loss reduction).
-model = fc.fit(fc.training_rows(grid, wx, hols, preds["issued_at"].max()))
+model = fc.fit(fc.training_rows(grid, wx, hols, preds["issued_at"].max(), neso))
 gain = pd.Series(model.booster_.feature_importance("gain"), index=fc.FEATURES)
 gain = (gain / gain.sum()).sort_values(ascending=False)
 
@@ -112,10 +119,11 @@ Open-Meteo's *historical forecast*, never observed weather. These rules are enfo
 
 **Result.** Over all leads the model's MAE is **{overall["model"]:.1f} gCO₂/kWh**, vs
 **{best_baseline:.1f}** for the best naïve baseline (**{1 - overall["model"] / best_baseline:.0%}
-better**) and **{overall["neso"]:.1f}** for NESO's published forecast. Adding NESO's own
-day-ahead wind and embedded wind/solar forecasts as inputs (the vintage issued before each
-forecast, never a later one) gives **{overall["model_neso"]:.1f}**; it is a candidate, not yet the
-live model.
+better**) and **{overall["neso"]:.1f}** for NESO's published forecast. The model uses NESO's own
+embedded wind/solar forecasts as inputs (the vintage issued before each forecast, never a later
+one); without them (the previous model) it scores **{overall["model_v2"]:.1f}**. Also adding
+NESO's transmission wind forecast gives **{overall["model_neso_wind"]:.1f}**, but its archive only
+covers the day each forecast is published, so most 48 h targets lack it and it is left out.
 
 ![MAE by lead](img/backtest_mae_by_lead.png)
 
