@@ -456,8 +456,9 @@ MotherDuck every few hours (GitHub Actions); dbt models and tests the data; a Li
 forecasts the next 48 hours; this app reads the result.
 [Code]({REPO}) · [dbt docs](https://p3rpetualpanda.github.io/gb-grid-carbon/)
 
-**Data:** Carbon Intensity API, National Energy System Operator (CC BY 4.0); weather by
-Open-Meteo.com (CC BY 4.0). Regional figures are forecasts (NESO publishes no regional actuals).
+**Data:** Carbon Intensity API, National Energy System Operator (CC BY 4.0); wind and solar
+forecasts from the NESO Data Portal (NESO Open Data Licence); weather by Open-Meteo.com
+(CC BY 4.0). Regional figures are forecasts (NESO publishes no regional actuals).
 """)
 
 

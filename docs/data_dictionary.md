@@ -60,6 +60,16 @@ Weather points (`src/gridcarbon/extract/weather.py`):
 | london | 51.51, -0.13 | demand, solar |
 | south_england_solar | 51.06, -1.80 | solar farms |
 
+### NESO Data Portal, `https://api.neso.energy/api/3/action` (CKAN)
+Free, no key. Licence: NESO Open Data Licence. Rows are read with `datastore_search_sql`, filtered
+on each forecast's own timestamp, and only targets up to 3 days after issue are kept.
+
+| Dataset | Grain | History used | Notes |
+|---|---|---|---|
+| `day-ahead-wind-forecast` | half-hour × forecast vintage, transmission-connected wind (MW) | 2022 → now | Since mid-2026 each vintage is stamped 08:45 and covers that day only. The archive has empty weeks: Jun–Sep 2023, Oct–Nov 2025 (4 weeks), Jan 2026 (1) and May 2026 (5). |
+| `14-days-ahead-wind-forecasts` | half-hour, transmission-connected wind (MW), **latest vintage only** | snapshotted each run from 18 Oct 2026 | `Datetime` and `ForecastDateTime` are UTC (checked across the October clock change: 50 settlement periods). |
+| `embedded-wind-and-solar-forecasts` | half-hour × vintage, wind and solar on local networks (MW) | 2022 → now | `TIME_GMT` is the **end** of the half-hour. Only the yearly archives carry the issue time. |
+
 ## Warehouse: `raw` schema
 
 Every raw table also has `_ingested_at TIMESTAMPTZ` and `_run_id VARCHAR` (lineage).
@@ -74,6 +84,9 @@ Loads are upserts on the natural key (in bold).
 | `raw.weather_observed` | **time, point_id**, latitude, longitude, temperature_2m, wind_speed_100m, shortwave_radiation, cloud_cover |
 | `raw.weather_historical_forecast` | same as `weather_observed` |
 | `raw.weather_forecast_snapshots` | **issued_at, time, point_id**, + weather columns |
+| `raw.neso_wind_forecast` | **issued_at, period_from**, forecast_mw, capacity_mw |
+| `raw.neso_wind_14d_snapshots` | **issued_at, period_from**, forecast_mw, capacity_mw |
+| `raw.neso_embedded_forecast` | **issued_at, period_from**, wind_mw, wind_capacity_mw, solar_mw, solar_capacity_mw |
 
 `issued_at` = the half-hour (official) or hour (weather) in which *we* fetched the forecast. NESO
 does not publish the exact issue time, so this is the honest "what was known at that moment".
