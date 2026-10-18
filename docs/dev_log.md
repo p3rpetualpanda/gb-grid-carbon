@@ -91,3 +91,37 @@ ours) against actuals later.
   on the second (0-2 h MAE 19.1 -> 17.0). Persistence is now also a reported baseline.
 - **Dashboard:** one Streamlit file, marts only, MotherDuck via secret or local file fallback.
   Found a pandas name clash (`df.rolling` column vs method) only by rendering it.
+
+## 2026-10-16: Pipeline every 2 h
+
+- The schedule moved from every 3 h to every 2 h (`17 */2 * * *`); user-facing text says "every
+  few hours" because GitHub's start times drift.
+
+## 2026-10-18: NESO forecasts as inputs, dashboard, schedule
+
+- **NESO wind and solar forecasts loaded, every vintage.** Day-ahead transmission wind and 0-14 day
+  embedded wind/solar from the NESO Data Portal since 2022 (~6M embedded rows), keyed on issue
+  time so a backtest can use only the vintage published before each forecast (plus a 30 min
+  allowance). Checked against the live API: only the yearly archives carry the issue timestamp
+  (resources are picked by their fields, not names); embedded `TIME_GMT` is the *end* of the
+  half-hour; the wind archive has empty weeks (Jun-Sep 2023, Oct-Nov 2025, Jan and May 2026).
+- **Backtest: MAE 26.8 -> 21.0** with those forecasts as inputs, better at every lead. Kept as a
+  candidate, not the live model: the day-ahead wind input is missing for most rows, because each
+  vintage only covers the day it is published.
+- **14-day wind forecast, snapshotted.** NESO's 14-day transmission wind forecast covers the full
+  48 h but keeps only its latest vintage, so every run now appends it to
+  `raw.neso_wind_14d_snapshots` (like the intensity forecast). Its timestamps are UTC: the
+  25 Oct clock-change day has 50 settlement periods. Over time this gives the model a full-horizon
+  wind input.
+- **Dashboard additions:** a ± typical-error band on the forecast (live track-record MAE by lead,
+  for whichever forecast is shown), a wind/solar outlook (`fct_wind_solar_outlook`: newest vintage
+  per half-hour), the live generation mix, and a plain-English forecast accuracy tab.
+- **A new dbt table crashed the live app.** The app code deployed on merge, but MotherDuck only
+  built the table on the next pipeline run, so the Now tab raised `CatalogException`. Fix: queries
+  on new tables return no rows while the table is missing (`rows_or_empty`), and the pipeline was
+  run straight away.
+- **GitHub skipped half the scheduled runs.** At every 2 h, only 12 of 26 scheduled runs started
+  over 16-18 Oct (median gap 4.4 h, max 6.5 h). The schedule now asks hourly, and cron-job.org
+  calls the `workflow_dispatch` API every 2 h with a fine-grained token (Actions read/write on
+  this repo only; expires 17 Oct 2027). Overlapping runs are blocked by the concurrency group and
+  loads are idempotent, so duplicate triggers are harmless.
