@@ -15,7 +15,11 @@ import pandas as pd
 
 LOCAL_DB = Path(__file__).resolve().parents[1] / "data" / "gridcarbon.duckdb"
 TZ = "Europe/London"
-BLUE, ORANGE, AQUA = "#2a78d6", "#eb6834", "#1baf7a"  # categorical slots 1-3
+BLUE, ORANGE, AQUA, YELLOW, MAGENTA, VIOLET = (  # categorical slots 1-6, in order
+    "#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#7c5cd6"
+)  # fmt: skip
+FUEL_COLOURS = {"Wind": BLUE, "Gas": ORANGE, "Nuclear": AQUA, "Solar": YELLOW,
+                "Imports": MAGENTA, "Other": VIOLET}  # fmt: skip
 SEQ_BLUE = ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"]
 REPO = "https://github.com/p3rpetualpanda/gb-grid-carbon"
 BACKTEST_RESULTS = Path(__file__).resolve().parents[1] / "docs" / "backtest_results.json"
@@ -45,11 +49,23 @@ def greenest_window(forecast: pd.Series, hours: float) -> tuple[pd.Timestamp, fl
 NESO_LEADS = 12  # NESO beats our model at 0-6 h (live and backtest), so trust it there
 
 
+def _shows_neso(issue: pd.DataFrame) -> pd.Series:
+    return (issue["lead"] <= NESO_LEADS) & issue["neso_gco2_kwh"].notna()
+
+
 def best_forecast(issue: pd.DataFrame) -> pd.Series:
     """Per half-hour: NESO's forecast for the first 6 h (when it has one), ours after that."""
-    use_neso = (issue["lead"] <= NESO_LEADS) & issue["neso_gco2_kwh"].notna()
-    blended = issue["neso_gco2_kwh"].where(use_neso, issue["model_gco2_kwh"])
+    blended = issue["neso_gco2_kwh"].where(_shows_neso(issue), issue["model_gco2_kwh"])
     return blended.set_axis(issue["period_from"]).astype(float)
+
+
+def typical_error(issue: pd.DataFrame, scored: pd.DataFrame) -> pd.Series:
+    """Per half-hour: the live MAE, in that lead band, of whichever forecast best_forecast shows."""
+    band = pd.cut(issue["lead"], [0, 12, 24, 48, 96],
+                  labels=["0-6 h", "6-12 h", "12-24 h", "24-48 h"]).astype(str)  # fmt: skip
+    mae = scored.set_index("band")
+    err = band.map(mae["neso_mae"]).where(_shows_neso(issue), band.map(mae["our_mae"]))
+    return err.set_axis(issue["period_from"]).astype(float)
 
 
 def main() -> None:
@@ -100,6 +116,25 @@ def main() -> None:
         order by period_from
     """)
     forecast = best_forecast(latest_issue)
+    scored = q("""
+        select coalesce(band, 'All') as band,
+               count(distinct issued_at) as issues, count(*) as n,
+               min(period_from) as first_target, max(period_from) as last_target,
+               avg(model_abs_error) as our_mae, avg(neso_abs_error) as neso_mae,
+               avg(model_abs_error) - avg(neso_abs_error) as gap,
+               avg(model_gco2_kwh - actual_gco2_kwh) as our_bias,
+               avg(neso_gco2_kwh - actual_gco2_kwh) as neso_bias,
+               avg((model_abs_error < neso_abs_error)::int) * 100 as we_closer
+        from (
+            select *, case when lead <= 12 then '0-6 h' when lead <= 24 then '6-12 h'
+                           when lead <= 48 then '12-24 h' else '24-48 h' end as band
+            from marts.fct_model_vs_official
+            where actual_gco2_kwh is not null and neso_abs_error is not null
+        )
+        group by grouping sets ((band), ())
+        order by grouping(band), min(lead)
+    """)
+    err = typical_error(latest_issue, scored)
 
     now_tab, planner_tab, greenest_tab, trends_tab, regions_tab, accuracy_tab, about_tab = st.tabs(
         [
@@ -134,6 +169,13 @@ def main() -> None:
             order by period_from
         """)
         fig = go.Figure()
+        if err.notna().any():
+            # Band first so the lines draw on top; tonexty fills between lower and upper.
+            fig.add_scatter(x=uk(forecast.index), y=(forecast - err).clip(lower=0),
+                            line=dict(width=0), hoverinfo="skip", showlegend=False)  # fmt: skip
+            fig.add_scatter(x=uk(forecast.index), y=forecast + err, line=dict(width=0),
+                            fill="tonexty", fillcolor="rgba(235, 104, 52, 0.15)",
+                            hoverinfo="skip", name="± typical error (live MAE)")  # fmt: skip
         fig.add_scatter(x=uk(past.period_from), y=past.actual_gco2_kwh, name="Actual",
                         line=dict(color=BLUE, width=2))  # fmt: skip
         fig.add_scatter(x=uk(forecast.index), y=forecast, name="Our forecast (NESO's for 0-6 h)",
@@ -151,6 +193,75 @@ def main() -> None:
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         )
         st.plotly_chart(fig, width="stretch")
+        if err.notna().any():
+            st.caption("Shaded band: the forecast ± its average live error at that lead time "
+                       "(Forecast accuracy tab).")  # fmt: skip
+
+        outlook = q(f"""
+            select period_from, wind_mw, embedded_wind_mw, embedded_solar_mw
+            from marts.fct_wind_solar_outlook
+            where period_from between '{forecast.index.min()}' and '{forecast.index.max()}'
+            order by period_from
+        """)
+        st.subheader("Wind and solar outlook (NESO forecast)")
+        if outlook.empty:
+            st.info("No NESO wind or solar forecast loaded for the next 48 h yet.")
+        else:
+            fig = go.Figure()
+            for col, name, dash, colour in (
+                ("wind_mw", "Wind farms (transmission)", "solid", BLUE),
+                ("embedded_wind_mw", "Wind on local networks", "dot", BLUE),
+                ("embedded_solar_mw", "Solar", "solid", YELLOW),
+            ):
+                fig.add_scatter(x=uk(outlook.period_from), y=outlook[col] / 1000, name=name,
+                                line=dict(color=colour, width=2, dash=dash))  # fmt: skip
+            fig.update_layout(
+                title="Forecast wind and solar output, next 48 h (UK time)",
+                yaxis_title="GW",
+                hovermode="x unified",
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            )
+            st.plotly_chart(fig, width="stretch")
+            st.caption("More wind and sun means lower carbon. NESO publishes its wind farm "
+                       "forecast once a day for that day only, so that line stops early; the "
+                       "local-network wind and solar forecast runs 3 days ahead.")  # fmt: skip
+
+        mix = q("""
+            select period_from, wind_pct as "Wind", gas_pct as "Gas", nuclear_pct as "Nuclear",
+                   solar_pct as "Solar", imports_pct as "Imports",
+                   coalesce(biomass_pct, 0) + coalesce(hydro_pct, 0) + coalesce(coal_pct, 0)
+                       + coalesce(other_pct, 0) as "Other"
+            from marts.fct_grid_halfhourly
+            where gas_pct is not null and period_from > (
+                select max(period_from) from marts.fct_grid_halfhourly where gas_pct is not null
+            ) - interval 7 day
+            order by period_from
+        """)
+        st.subheader("What's powering the grid")
+        if mix.empty:
+            st.info("No generation mix loaded yet.")
+        else:
+            now_mix = mix.iloc[-1]
+            shares = now_mix[list(FUEL_COLOURS)].astype(float).sort_values()
+            c1, c2 = st.columns([1, 2])
+            fig = px.bar(x=shares.values, y=shares.index, orientation="h", text_auto=".0f",
+                         color=shares.index, color_discrete_map=FUEL_COLOURS,
+                         labels=dict(x="% of generation", y=""))  # fmt: skip
+            fig.update_layout(title=f"Now ({hhmm(now_mix.period_from)})", showlegend=False)
+            fig.update_xaxes(range=[0, shares.max() * 1.2])  # room for the outside labels
+            fig.update_traces(textposition="outside", cliponaxis=False,
+                              hovertemplate="%{y}: %{x:.1f}%<extra></extra>")  # fmt: skip
+            c1.plotly_chart(fig, width="stretch")
+            long = mix.melt("period_from", var_name="fuel", value_name="pct")
+            long["period_from"] = uk(long["period_from"])
+            fig = px.area(long, x="period_from", y="pct", color="fuel",
+                          color_discrete_map=FUEL_COLOURS,
+                          category_orders=dict(fuel=list(FUEL_COLOURS)),
+                          labels=dict(period_from="", pct="% of generation", fuel=""))  # fmt: skip
+            fig.update_layout(title="Last 7 days", hovermode="x unified")
+            c2.plotly_chart(fig, width="stretch")
+            st.caption("Other = biomass, hydro, coal and other sources. Shares of GB generation "
+                       "(Carbon Intensity API).")  # fmt: skip
 
     with planner_tab:
         st.subheader("When should I run it?")
@@ -209,24 +320,6 @@ def main() -> None:
         st.plotly_chart(fig, width="stretch")
 
     with accuracy_tab:
-        scored = q("""
-            select coalesce(band, 'All') as band,
-                   count(distinct issued_at) as issues, count(*) as n,
-                   min(period_from) as first_target, max(period_from) as last_target,
-                   avg(model_abs_error) as our_mae, avg(neso_abs_error) as neso_mae,
-                   avg(model_abs_error) - avg(neso_abs_error) as gap,
-                   avg(model_gco2_kwh - actual_gco2_kwh) as our_bias,
-                   avg(neso_gco2_kwh - actual_gco2_kwh) as neso_bias,
-                   avg((model_abs_error < neso_abs_error)::int) * 100 as we_closer
-            from (
-                select *, case when lead <= 12 then '0-6 h' when lead <= 24 then '6-12 h'
-                               when lead <= 48 then '12-24 h' else '24-48 h' end as band
-                from marts.fct_model_vs_official
-                where actual_gco2_kwh is not null and neso_abs_error is not null
-            )
-            group by grouping sets ((band), ())
-            order by grouping(band), min(lead)
-        """)
         st.subheader("Live track record: our forecast vs NESO's, issued in the same run")
         if scored.empty:
             st.info("The track record builds up as the pipeline runs every few hours.")

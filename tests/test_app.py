@@ -40,3 +40,18 @@ def test_backtest_caption_reads_results_file(tmp_path):
     caption = app.backtest_caption(path)
     assert "run 2026-01-02" in caption and "25.0 MAE vs 40.0" in caption
     assert app.backtest_caption(tmp_path / "missing.json").startswith("12-month backtest: [")
+
+
+def test_typical_error_follows_the_forecast_shown_and_its_lead_band():
+    issue = pd.DataFrame({
+        "period_from": IDX[:4], "lead": [1, 12, 13, 60],
+        "model_gco2_kwh": [1.0, 2.0, 3.0, 4.0], "neso_gco2_kwh": [10, None, 30, 40],
+    })  # fmt: skip
+    scored = pd.DataFrame({
+        "band": ["0-6 h", "6-12 h", "24-48 h", "All"],
+        "our_mae": [5.0, 6.0, 8.0, 7.0], "neso_mae": [2.0, 3.0, 4.0, 3.0],
+    })  # fmt: skip
+    out = app.typical_error(issue, scored)
+    # NESO's error where NESO is shown (lead <= 12 with a value), ours otherwise.
+    assert out.tolist() == [2.0, 5.0, 6.0, 8.0] and out.index.equals(IDX[:4])
+    assert app.typical_error(issue, scored.iloc[:0]).isna().all()  # no track record yet

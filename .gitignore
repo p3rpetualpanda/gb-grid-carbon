@@ -35,3 +35,8 @@ memory/
 *.code-workspace
 .DS_Store
 Thumbs.db
+
+# Local Claude notes (never commit)
+CLAUDE.md
+mistakes.md
+next-steps.md
