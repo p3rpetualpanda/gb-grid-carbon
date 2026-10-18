@@ -21,7 +21,7 @@ flowchart LR
   D --> F[48h LightGBM forecast]
   F --> D
   D --> S[Streamlit dashboard]
-  G[GitHub Actions] -->|every 2h| E
+  G[GitHub Actions] -->|hourly| E
 ```
 
 ## Key findings
@@ -88,7 +88,7 @@ Found by running against the real APIs, not by unit tests (full write-up in
 | 3 | Extraction + idempotent loading + backfill (48 offline tests; ~2.3M rows since 2017) | ✅ Done |
 | 4 | MotherDuck cloud warehouse (same code, `DB_TARGET=motherduck`) | ✅ Done |
 | 5 | dbt models (staging → marts) + 25 data tests | ✅ Done |
-| 6 | Scheduled GitHub Actions pipeline (every 2h) + dbt docs site | ✅ Live |
+| 6 | Scheduled GitHub Actions pipeline (hourly) + dbt docs site | ✅ Live |
 | 7 | Analysis & findings → [`docs/findings.md`](docs/findings.md) | ✅ Done |
 | 8 | 48h forecast, backtest, live scoring vs NESO → [`docs/backtest.md`](docs/backtest.md) | ✅ Live |
 | 9 | Streamlit dashboard (`app/streamlit_app.py`) → [live](https://gb-grid-carbon-b8k4zy3yzvfzqzxewxzdsk.streamlit.app/) | ✅ Live |

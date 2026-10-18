@@ -1,13 +1,14 @@
 name: pipeline
 
-# Every 2 hours (GitHub delays and skips some scheduled runs, so real gaps are often ~4-6 h):
+# Hourly. GitHub delays and skips many scheduled runs (at every 2 h, gaps were a median of
+# 4.4 h over 16-18 Oct), so ask hourly to get closer to every 2 h. Each run:
 # extract + load (incremental, with forecast snapshots) into MotherDuck,
 # check source freshness, rebuild and test the dbt models, and publish dbt docs to Pages.
 # GitHub disables schedules in public repos after 60 days without commits: re-enable from
 # the Actions tab if that happens.
 on:
   schedule:
-    - cron: "17 */2 * * *"  # :17 avoids the busy top of the hour; start times can lag
+    - cron: "17 * * * *"  # :17 avoids the busy top of the hour; start times can lag
   workflow_dispatch:
 
 concurrency:
