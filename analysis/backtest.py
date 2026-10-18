@@ -1,10 +1,15 @@
 """Phase 8: rolling-origin backtest of the 48h forecast -> docs/backtest.md + chart.
 
+Also writes the headline numbers to docs/backtest_results.json (read by the dashboard); then run
+`python scripts/update_backtest_docs.py` to copy them into README.md and docs/showcase.md.
+
 Run after `dbt build` (local warehouse):  python analysis/backtest.py   (~1-3 min)
 """
 
 from __future__ import annotations
 
+import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import matplotlib
@@ -116,4 +121,16 @@ at long leads to be somewhat higher than this backtest.
 {md(gain.round(3).to_frame("gain_share"))}
 """
 (ROOT / "docs" / "backtest.md").write_text(report, encoding="utf-8")
+results = {
+    "run_date": datetime.now(UTC).date().isoformat(),
+    "forecasts": int(preds["issued_at"].nunique()),
+    "predictions": len(preds),
+    "model_mae": round(float(overall["model"]), 1),
+    "best_baseline_mae": round(float(best_baseline), 1),
+    "improvement": round(float(1 - overall["model"] / best_baseline), 3),
+    "neso_mae": round(float(overall["neso"]), 1),
+}
+(ROOT / "docs" / "backtest_results.json").write_text(
+    json.dumps(results, indent=2) + "\n", encoding="utf-8"
+)
 print(report)

@@ -32,3 +32,11 @@ def test_best_forecast_uses_neso_for_first_6h_when_present():
 def test_greenest_window_rejects_too_short_forecast():
     with pytest.raises(ValueError):
         app.greenest_window(SERIES, 8)
+
+
+def test_backtest_caption_reads_results_file(tmp_path):
+    path = tmp_path / "results.json"
+    path.write_text('{"run_date": "2026-01-02", "model_mae": 25.04, "best_baseline_mae": 40}')
+    caption = app.backtest_caption(path)
+    assert "run 2026-01-02" in caption and "25.0 MAE vs 40.0" in caption
+    assert app.backtest_caption(tmp_path / "missing.json").startswith("12-month backtest: [")
