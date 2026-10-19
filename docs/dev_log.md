@@ -140,3 +140,18 @@ ours) against actuals later.
 - **Known gap:** embedded forecasts start in 2019, so 2017-2018 training rows have them missing.
   LightGBM handles NaN, and the backtest scores the result, but the model could learn "missing
   means an old year". Restricting training to 2019+ is worth testing.
+
+## 2026-10-19: trend fixes tested, v3 kept; fallback label
+
+- **No trend fix ships.** Three variants were scored against v3 on the same 12 backtest folds,
+  with day-blocked bootstrap intervals. Training on 2021+ only changed nothing: training
+  already starts in 2022, when Open-Meteo's historical forecasts begin, so the 2017-2021 years
+  were never in it. Predicting the gap to `lag_day` was worse (MAE +0.14, interval -0.06 to
+  +0.35). Recency weights with a 2-year half-life cut MAE by 0.29 (interval -0.49 to -0.09) and
+  bias to 0.0-0.7, but widened the monthly bias swing (spread 26.3 -> 29.7) and made the
+  greenest-window choice slightly worse (regret 6.63 -> 6.78). That fails the "monthly bias
+  narrows" gate, so v3 stays. The remaining error is month-to-month swings (-17 to +10), which is
+  what error feedback targets.
+- **Fallback label.** The NESO fallback was labelled `lgbm-direct-v2`, the same as the old
+  model, so the 6 pre-v3 forecasts on 18 Oct looked like fallback runs. None were: every run
+  since v3 merged used v3. The fallback is now `lgbm-direct-v3-fallback`.

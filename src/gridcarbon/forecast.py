@@ -23,7 +23,7 @@ ACTUAL_LAG = pd.Timedelta(hours=1)  # actuals publish late: never use the last h
 # combinations unseen and skewed live forecasts.
 ISSUE_EVERY = "390min"
 MODEL_VERSION = "lgbm-direct-v3"
-FALLBACK_VERSION = "lgbm-direct-v2"  # BASE_FEATURES only: used live when NESO inputs are missing
+FALLBACK_VERSION = "lgbm-direct-v3-fallback"  # BASE_FEATURES only, when NESO inputs are missing
 # Short leads lean on the last known actual: weight exp(-(lead-1)/6). Decay chosen on the first
 # 6 backtest months, checked on the last 6 (0-2 h MAE 19.1 -> 17.0; overall unchanged).
 PERSISTENCE_DECAY = 6
