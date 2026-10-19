@@ -184,8 +184,9 @@ def main() -> None:
             from marts.fct_model_vs_official as f
             join ml.model_forecasts as m using (issued_at, period_from)
             where f.actual_gco2_kwh is not null and f.neso_abs_error is not null
-              and m.model_version = (
-                  select model_version from ml.model_forecasts order by issued_at desc limit 1
+              and m.model_version = (  -- the version of the issue the chart shows
+                  select any_value(model_version) from ml.model_forecasts
+                  where issued_at = (select max(issued_at) from marts.fct_model_vs_official)
               )
         )
         group by band
