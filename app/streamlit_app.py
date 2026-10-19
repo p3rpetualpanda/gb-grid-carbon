@@ -54,6 +54,23 @@ def day_windows(day: pd.Series, hours: float) -> pd.Series:
     return twice.rolling(slots).mean().shift(-(slots - 1)).iloc[:48].set_axis(day.index)
 
 
+def typical_day(typical: pd.DataFrame) -> pd.DataFrame:
+    """Mean intensity by month x half-hour slot from weekday/weekend rows, weighted by their
+    half-hour counts `n` (a plain mean would count weekends as half of all days). Months
+    missing any slot are dropped."""
+    sums = typical.assign(gn=typical["g"] * typical["n"]).groupby(["month", "halfhour_slot"])
+    sums = sums[["gn", "n"]].sum()
+    return (sums["gn"] / sums["n"]).unstack().reindex(columns=range(48)).dropna()
+
+
+def upcoming(issue: pd.DataFrame, now: pd.Timestamp, min_rows: int = 16) -> pd.DataFrame:
+    """The issue's half-hours from the current one on: the latest issue can be hours old, and a
+    window that already started is no advice. If under `min_rows` remain (the pipeline is far
+    behind), the whole issue is kept so the page still renders; the caller flags it."""
+    left = issue[issue["period_from"] >= now.floor("30min")].reset_index(drop=True)
+    return left if len(left) >= min_rows else issue
+
+
 def slot_label(slot: int) -> str:
     return f"{slot // 2 % 24:02d}:{slot % 2 * 30:02d}"
 
@@ -158,11 +175,20 @@ def main() -> None:
         f"Data refreshes every few hours (last: {hhmm(refreshed)} UK time). [Source code]({REPO})"
     )
 
-    latest_issue = q("""
+    now = pd.Timestamp.now("UTC")
+    latest_issue = upcoming(
+        q("""
         select period_from, lead, model_gco2_kwh, neso_gco2_kwh from marts.fct_model_vs_official
         where issued_at = (select max(issued_at) from marts.fct_model_vs_official)
         order by period_from
-    """)
+    """),
+        now,
+        min_rows=16,  # 8 h, the planner's longest task
+    )
+    first = latest_issue.period_from.min()
+    if first < now.floor("30min"):
+        st.warning(f"The pipeline is behind: the latest forecast starts {hhmm(first)}, "
+                   "so some times below have passed.")  # fmt: skip
     forecast = best_forecast(latest_issue)
     scored = q("""
         select coalesce(band, 'All') as band,
@@ -183,27 +209,22 @@ def main() -> None:
         group by grouping sets ((band), ())
         order by grouping(band), min(lead)
     """)
-    # MAE of the model version that issued the forecast shown (reads ml.model_forecasts, which
-    # MotherDuck already has, so this works before dbt rebuilds the marts).
-    current = rows_or_empty(
-        q,
-        """
+    # MAE of the model version that issued the forecast shown.
+    current = q("""
         select band, count(*) as n, avg(model_abs_error) as our_mae
         from (
-            select f.model_abs_error,
-                   case when f.lead <= 12 then '0-6 h' when f.lead <= 24 then '6-12 h'
-                        when f.lead <= 48 then '12-24 h' else '24-48 h' end as band
-            from marts.fct_model_vs_official as f
-            join ml.model_forecasts as m using (issued_at, period_from)
-            where f.actual_gco2_kwh is not null and f.neso_abs_error is not null
-              and m.model_version = (  -- the version of the issue the chart shows
-                  select any_value(model_version) from ml.model_forecasts
+            select model_abs_error,
+                   case when lead <= 12 then '0-6 h' when lead <= 24 then '6-12 h'
+                        when lead <= 48 then '12-24 h' else '24-48 h' end as band
+            from marts.fct_model_vs_official
+            where actual_gco2_kwh is not null and neso_abs_error is not null
+              and model_version = (  -- the version of the issue the chart shows
+                  select any_value(model_version) from marts.fct_model_vs_official
                   where issued_at = (select max(issued_at) from marts.fct_model_vs_official)
               )
         )
         group by band
-        """,
-    )
+    """)
     err = typical_error(latest_issue, scored, current)
 
     now_tab, planner_tab, greenest_tab, trends_tab, regions_tab, accuracy_tab, about_tab = st.tabs(
@@ -355,7 +376,8 @@ def main() -> None:
 
     with greenest_tab:
         typical = q("""
-            select month, halfhour_slot, is_weekend, avg(actual_gco2_kwh) as g
+            select month, halfhour_slot, is_weekend, avg(actual_gco2_kwh) as g,
+                   count(actual_gco2_kwh) as n
             from marts.fct_grid_halfhourly
             where period_from > (select max(period_from) from marts.fct_grid_halfhourly)
                                 - interval 365 day
@@ -363,8 +385,7 @@ def main() -> None:
         """)
         months = list(pd.date_range("2024-01-01", periods=12, freq="MS").strftime("%B"))
         # Only months with every half-hour slot (a short history or a gap leaves some out).
-        by_slot = typical.groupby(["month", "halfhour_slot"]).g.mean().unstack()
-        by_slot = by_slot.reindex(columns=range(48)).dropna()
+        by_slot = typical_day(typical)
         if by_slot.empty:  # st.stop() here would also blank every later tab
             st.info("Not enough history yet to show typical days.")
         else:

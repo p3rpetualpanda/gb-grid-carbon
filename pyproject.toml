@@ -14,7 +14,7 @@ dependencies = [
     "tenacity>=9.0",
     "pydantic>=2.7",
     "pydantic-settings>=2.3",
-    "duckdb>=1.1",
+    "duckdb==1.5.6",  # pinned: MotherDuck supports specific versions; keep app/requirements.txt in step
     "pytz",  # duckdb needs it to return TIMESTAMPTZ values as Python datetimes
     "pandas>=2.2",
     "pyarrow>=16",
@@ -30,7 +30,7 @@ dev = [
 ]
 # Added in later phases:
 dbt = ["dbt-core>=1.9", "dbt-duckdb>=1.9"]
-ml = ["lightgbm>=4.3", "scikit-learn>=1.5"]
+ml = ["lightgbm==4.7.0", "scikit-learn>=1.5"]  # pinned: a new release changes live forecasts
 app = ["streamlit>=1.38", "plotly>=5.22"]
 analysis = ["matplotlib>=3.9"]
 

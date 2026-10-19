@@ -100,3 +100,26 @@ def test_day_windows_wrap_past_midnight():
 def test_slot_label():
     assert app.slot_label(0) == "00:00" and app.slot_label(47) == "23:30"
     assert app.slot_label(50) == "01:00"  # a window ending after midnight
+
+
+def test_upcoming_drops_half_hours_already_past():
+    issue = pd.DataFrame({"period_from": pd.date_range(IDX[0], periods=40, freq="30min")})
+    now = IDX[0] + pd.Timedelta(minutes=95)  # inside the 4th half-hour
+    out = app.upcoming(issue, now, min_rows=16)
+    assert out["period_from"].iloc[0] == IDX[3] and len(out) == 37
+    # Too little forecast left to plan with: keep the whole (stale) issue rather than crash.
+    assert len(app.upcoming(issue, now + pd.Timedelta(hours=15), min_rows=16)) == 40
+
+
+def test_typical_day_weights_weekdays_and_weekends_by_count():
+    def rows(month, slots, weekend, g, n):
+        return pd.DataFrame({"month": month, "halfhour_slot": slots, "is_weekend": weekend,
+                             "g": g, "n": n})  # fmt: skip
+
+    typical = pd.concat([
+        rows(1, range(48), False, 100.0, 5), rows(1, range(48), True, 30.0, 2),
+        rows(2, range(47), False, 1.0, 1),
+    ])  # fmt: skip
+    out = app.typical_day(typical)
+    assert out.index.tolist() == [1]  # month 2 lacks a slot
+    assert (out.loc[1] == 80.0).all()  # (5 * 100 + 2 * 30) / 7, not the plain mean 65

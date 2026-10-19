@@ -49,6 +49,17 @@ def test_lag_day_is_the_most_recent_known_same_slot():
     assert rows.loc[96, "lag_day"] == rows.loc[96, "y"] - 144
 
 
+def test_last_actual_is_not_carried_over_a_long_publication_gap():
+    issue = START + pd.Timedelta(days=10)
+    last_known = issue - fc.ACTUAL_LAG - fc.STEP
+    for gap_h, carried in ((1, True), (6, False)):
+        grid = spine(20)
+        grid.loc[last_known - pd.Timedelta(hours=gap_h) + fc.STEP : last_known, "y"] = np.nan
+        rows = fc.features(grid, hourly_weather(20), pd.DatetimeIndex([issue]), set())
+        # A short gap reuses the latest actual; a 6 h outage must not pass as the current value.
+        assert rows["last_actual"].notna().all() == carried, gap_h
+
+
 def test_blend_trusts_last_actual_at_lead_1_and_model_far_out():
     rows = pd.DataFrame({"lead": [1, 96, 1], "last_actual": [88.0, 88.0, np.nan]})
     out = fc.blend(rows, [170.0, 170.0, 170.0])
