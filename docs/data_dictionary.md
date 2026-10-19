@@ -100,8 +100,7 @@ does not publish the exact issue time, so this is the honest "what was known at 
 `yhat_base` / `base_version` are the stage-1 model's forecast and version before any later
 correction step. Today they equal `yhat` / `model_version`; they are stored separately so error
 features for a future correction model are never computed from already-corrected forecasts.
-NULL for runs before 20 Oct 2026, when they were added (`ALTER TABLE ... ADD COLUMN` in
-`load.prepare`).
+NULL for runs before they were added (PR #17; `ALTER TABLE ... ADD COLUMN` in `load.prepare`).
 
 ## Warehouse: `meta` schema
 
