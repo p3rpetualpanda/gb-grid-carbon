@@ -269,3 +269,46 @@ def mae_by_lead(preds: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
     table = pd.DataFrame(errs).groupby(bands[complete.index], observed=True).mean()
     table.loc["all"] = pd.DataFrame(errs).mean()
     return table
+
+
+def paired_bootstrap(
+    preds: pd.DataFrame, a: str, b: str, n: int = 1000, seed: int = 0
+) -> tuple[float, float, float]:
+    """MAE(a) - MAE(b) on rows where both exist, with a 95% interval from resampling whole UK days
+    of targets (errors within a day move together, so half-hours aren't independent draws).
+    Negative means `a` is better; trust it only if the whole interval is below zero."""
+    rows = preds.dropna(subset=["y", a, b])
+    if rows.empty:
+        raise ValueError(f"no rows with y, {a} and {b}")
+    by_day = pd.DataFrame(
+        {
+            "gap": (rows[a] - rows["y"]).abs() - (rows[b] - rows["y"]).abs(),
+            "day": rows["period_from"].dt.tz_convert("Europe/London").dt.date,
+        }
+    ).groupby("day")["gap"]
+    gap, count = by_day.sum().to_numpy(), by_day.size().to_numpy()
+    days = len(count)
+    draws = np.random.default_rng(seed).multinomial(days, np.full(days, 1 / days), size=n)
+    lo, hi = np.percentile(draws @ gap / (draws @ count), [2.5, 97.5])
+    return float(gap.sum() / count.sum()), float(lo), float(hi)
+
+
+def window_regret(preds: pd.DataFrame, col: str, hours: float = 3) -> pd.Series:
+    """Per issue: how much dirtier (gCO2/kWh) the greenest `hours` window picked from forecast
+    `col` actually was than the truly greenest one. 0 = picked the best window. Windows with any
+    missing forecast or actual are skipped; issues with no complete window are dropped."""
+    slots = max(1, round(hours * 2))
+    rows = preds.dropna(subset=["y", col])
+
+    def window_means(c: str) -> pd.DataFrame:  # issue x window-end lead; NaN if incomplete
+        wide = rows.pivot(index="issued_at", columns="lead", values=c)
+        return wide.reindex(columns=range(1, HORIZON + 1)).T.rolling(slots).mean().T
+
+    fc_mean, y_mean = window_means(col), window_means("y")
+    complete = fc_mean.notna() & y_mean.notna()
+    keep = complete.any(axis=1)
+    fc_mean, y_mean = fc_mean.where(complete)[keep], y_mean.where(complete)[keep]
+    picked = y_mean.to_numpy()[
+        np.arange(len(y_mean)), y_mean.columns.get_indexer(fc_mean.idxmin(axis=1))
+    ]
+    return pd.Series(picked - y_mean.min(axis=1).to_numpy(), index=y_mean.index, name=col)
