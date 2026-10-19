@@ -60,7 +60,8 @@ DDL: dict[str, str] = {
         wind_capacity_mw DOUBLE, solar_mw DOUBLE, solar_capacity_mw DOUBLE, {_LINEAGE}""",
     "ml.model_forecasts": f"""
         issued_at TIMESTAMPTZ NOT NULL, period_from TIMESTAMPTZ NOT NULL, lead INTEGER NOT NULL,
-        yhat DOUBLE, model_version VARCHAR, {_LINEAGE}""",
+        yhat DOUBLE, model_version VARCHAR, yhat_base DOUBLE, base_version VARCHAR,
+        {_LINEAGE}""",
     "meta.pipeline_runs": """
         run_id VARCHAR NOT NULL, command VARCHAR NOT NULL, started_at TIMESTAMPTZ NOT NULL,
         finished_at TIMESTAMPTZ, status VARCHAR NOT NULL, rows_loaded BIGINT, error VARCHAR""",
@@ -68,6 +69,13 @@ DDL: dict[str, str] = {
         run_id VARCHAR NOT NULL, dataset VARCHAR NOT NULL, window_start TIMESTAMPTZ NOT NULL,
         window_end TIMESTAMPTZ NOT NULL, rows_loaded BIGINT NOT NULL,
         loaded_at TIMESTAMPTZ NOT NULL""",
+}
+
+
+# Columns added after a table first shipped (CREATE TABLE IF NOT EXISTS won't add them). Rows from
+# before stay NULL. yhat_base/base_version: the stage-1 forecast before any later correction.
+ADDED_COLUMNS: dict[str, list[str]] = {
+    "ml.model_forecasts": ["yhat_base DOUBLE", "base_version VARCHAR"],
 }
 
 
@@ -94,6 +102,9 @@ def prepare(con: duckdb.DuckDBPyConnection) -> None:
         con.execute(f"CREATE SCHEMA IF NOT EXISTS {schema}")
     for table, columns in DDL.items():
         con.execute(f"CREATE TABLE IF NOT EXISTS {table} ({columns})")
+    for table, columns in ADDED_COLUMNS.items():
+        for column in columns:
+            con.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column}")
 
 
 def utcnow() -> datetime:

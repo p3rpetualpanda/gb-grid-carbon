@@ -57,6 +57,26 @@ def test_typical_error_follows_the_forecast_shown_and_its_lead_band():
     assert app.typical_error(issue, scored.iloc[:0]).isna().all()  # no track record yet
 
 
+def test_typical_error_uses_the_current_versions_mae_once_it_has_enough_rows():
+    issue = pd.DataFrame({
+        "period_from": IDX[:3], "lead": [13, 30, 60],
+        "model_gco2_kwh": [1.0, 2.0, 3.0], "neso_gco2_kwh": [None, None, None],
+    })  # fmt: skip
+    scored = pd.DataFrame({  # every model version
+        "band": ["6-12 h", "12-24 h", "24-48 h", "All"],
+        "our_mae": [6.0, 7.0, 8.0, 7.0], "neso_mae": [3.0, 4.0, 5.0, 4.0],
+    })  # fmt: skip
+    current = pd.DataFrame({  # the version that issued the forecast shown
+        "band": ["6-12 h", "12-24 h"], "n": [150, 40], "our_mae": [2.0, 1.0],
+    })  # fmt: skip
+    out = app.typical_error(issue, scored, current, min_n=100)
+    # 6-12 h has enough rows for its own MAE; 12-24 h (40 rows) and 24-48 h (none) use all versions.
+    assert out.tolist() == [2.0, 7.0, 8.0]
+    assert app.mixes_versions(issue, current, min_n=100)
+    assert not app.mixes_versions(issue.iloc[:1], current, min_n=100)
+    assert app.typical_error(issue, scored, current.iloc[:0]).tolist() == [6.0, 7.0, 8.0]
+
+
 def test_rows_or_empty_survives_a_table_dbt_has_not_built_yet():
     import duckdb
 

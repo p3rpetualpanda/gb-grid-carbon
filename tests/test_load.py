@@ -28,6 +28,23 @@ def test_prepare_is_idempotent(con):
     prepare(con)
 
 
+def test_prepare_adds_new_columns_to_an_existing_table():
+    import duckdb
+
+    con = duckdb.connect()
+    con.execute("CREATE SCHEMA ml")
+    con.execute(  # the table as it was before yhat_base/base_version
+        "CREATE TABLE ml.model_forecasts (issued_at TIMESTAMPTZ NOT NULL, period_from TIMESTAMPTZ "
+        "NOT NULL, lead INTEGER NOT NULL, yhat DOUBLE, model_version VARCHAR, _ingested_at "
+        "TIMESTAMPTZ NOT NULL, _run_id VARCHAR NOT NULL)"
+    )
+    con.execute("INSERT INTO ml.model_forecasts VALUES (?, ?, 1, 90, 'v3', ?, 'r0')", [T0, T0, T0])
+    prepare(con)
+    prepare(con)  # idempotent
+    row = con.execute("SELECT yhat, yhat_base, base_version FROM ml.model_forecasts").fetchone()
+    assert row == (90.0, None, None)  # old rows stay NULL: unknown, not a copy of yhat
+
+
 def test_upsert_twice_is_idempotent(con):
     upsert(con, TABLE, periods(0, 9, 1), KEY, "r1")
     upsert(con, TABLE, periods(0, 9, 1), KEY, "r2")

@@ -248,13 +248,18 @@ def predict_live(con, now: datetime) -> pd.DataFrame:
     if rows[FEATURES].drop(columns=BASE_FEATURES).isna().any().any():
         cols, version = BASE_FEATURES, FALLBACK_VERSION
     model = fit(training_rows(grid, wx_hist, hols, issue, neso), cols)
+    yhat = blend(rows, model.predict(rows[cols]))
     return pd.DataFrame(
         {
             "issued_at": rows["issued_at"],
             "period_from": rows["period_from"],
             "lead": rows["lead"],
-            "yhat": blend(rows, model.predict(rows[cols])),
+            "yhat": yhat,
             "model_version": version,
+            # Stage-1 output and version. Equal to yhat/model_version until a correction step
+            # exists; stored separately so its errors are never computed from corrected forecasts.
+            "yhat_base": yhat,
+            "base_version": version,
         }
     )
 

@@ -91,6 +91,17 @@ Loads are upserts on the natural key (in bold).
 `issued_at` = the half-hour (official) or hour (weather) in which *we* fetched the forecast. NESO
 does not publish the exact issue time, so this is the honest "what was known at that moment".
 
+## Warehouse: `ml` schema
+
+| Table | Columns |
+|---|---|
+| `ml.model_forecasts` | **issued_at, period_from**, lead INT (1-96 half-hours), yhat DOUBLE (published forecast), model_version, yhat_base DOUBLE, base_version, + lineage |
+
+`yhat_base` / `base_version` are the stage-1 model's forecast and version before any later
+correction step. Today they equal `yhat` / `model_version`; they are stored separately so error
+features for a future correction model are never computed from already-corrected forecasts.
+NULL for runs before they were added (PR #17; `ALTER TABLE ... ADD COLUMN` in `load.prepare`).
+
 ## Warehouse: `meta` schema
 
 | Table | Purpose |
