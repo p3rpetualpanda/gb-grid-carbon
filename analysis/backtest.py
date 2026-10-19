@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import sys
 from datetime import UTC, datetime
+from itertools import cycle
 from pathlib import Path
 
 import matplotlib
@@ -52,23 +53,31 @@ variants = {
     "model": fc.FEATURES,
     "model_v2": fc.BASE_FEATURES,
     "model_neso_wind": fc.BASE_FEATURES + fc.NESO_FEATURES,
+    "model_wind_points": fc.FEATURES + fc.WIND_POINT_FEATURES,
 }
+# A wind point with gaps would quietly weaken model_wind_points; show coverage before trusting it.
+print(
+    "Non-null share per wind point:", wx[fc.WIND_POINT_FEATURES].notna().mean().round(3).to_dict()
+)
 preds = fc.backtest(grid, wx, hols, months=12, neso=neso, variants=variants)
 methods = {"model": "Our model (LightGBM + NESO embedded wind/solar)",
            "model_v2": "Previous model (no NESO inputs)",
            "model_neso_wind": "+ NESO transmission wind",
+           "model_wind_points": "+ wind at each wind-farm point",
            "neso": "NESO published forecast*",
            "last_actual": "Last known actual",
            "lag_day": "Same slot, last known day", "lag_week": "Same slot, last week"}  # fmt: skip
 table = fc.mae_by_lead(preds, list(methods))
+VARIANTS = ("model_v2", "model_neso_wind", "model_wind_points")  # each compared with the live one
 
 # Chart: MAE by lead band, one line per method (legend + direct labels).
 bands = [b for b in table.index if b != "all"]
 fig, ax = plt.subplots(figsize=(8, 5.2), dpi=150)
 fig.patch.set_facecolor(SURFACE)
 ax.set_facecolor(SURFACE)
+# Colours repeat if variants outnumber them, rather than crash after minutes of training.
 for (col, label), colour in zip(
-    methods.items(), (BLUE, MUTED, VIOLET, ORANGE, AQUA, YELLOW, MAGENTA), strict=True
+    methods.items(), cycle((BLUE, MUTED, VIOLET, INK2, ORANGE, AQUA, YELLOW, MAGENTA))
 ):
     ax.plot(bands, table.loc[bands, col], color=colour, linewidth=2, marker="o", markersize=5,
             label=label)  # fmt: skip
@@ -120,8 +129,8 @@ regret_table = pd.DataFrame(
     {"mean regret": regret.mean(), "share within 5 of best": (regret <= 5).mean()}
 ).rename(index=methods)
 intervals = pd.DataFrame(
-    [fc.paired_bootstrap(complete, v, "model") for v in ("model_v2", "model_neso_wind")],
-    index=[methods["model_v2"], methods["model_neso_wind"]],
+    [fc.paired_bootstrap(complete, v, "model") for v in VARIANTS],
+    index=[methods[v] for v in VARIANTS],
     columns=["MAE minus live model", "95% low", "95% high"],
 )
 every_h = pd.Timedelta(fc.ISSUE_EVERY) / pd.Timedelta(hours=1)
@@ -146,6 +155,9 @@ embedded wind/solar forecasts as inputs (the vintage issued before each forecast
 one); without them (the previous model) it scores **{overall["model_v2"]:.1f}**. Also adding
 NESO's transmission wind forecast gives **{overall["model_neso_wind"]:.1f}**, but its archive only
 covers the day each forecast is published, so most 48 h targets lack it and it is left out.
+Adding forecast wind speed at each of {len(fc.WIND_POINT_FEATURES)} wind points as separate inputs
+(the wind-farm clusters plus the points already averaged) gives
+**{overall["model_wind_points"]:.1f}** (a candidate, not live).
 
 ![MAE by lead](img/backtest_mae_by_lead.png)
 

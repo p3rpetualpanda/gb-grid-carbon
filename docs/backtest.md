@@ -19,16 +19,19 @@ embedded wind/solar forecasts as inputs (the vintage issued before each forecast
 one); without them (the previous model) it scores **27.0**. Also adding
 NESO's transmission wind forecast gives **20.9**, but its archive only
 covers the day each forecast is published, so most 48 h targets lack it and it is left out.
+Adding forecast wind speed at each of 11 wind points as separate inputs
+(the wind-farm clusters plus the points already averaged) gives
+**18.7** (a candidate, not live).
 
 ![MAE by lead](img/backtest_mae_by_lead.png)
 
-|  | Our model (LightGBM + NESO embedded wind/solar) | Previous model (no NESO inputs) | + NESO transmission wind | NESO published forecast* | Last known actual | Same slot, last known day | Same slot, last week |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| 0-6h | 17.6 | 20.8 | 17.9 | 9.9 | 28.9 | 40.1 | 54.3 |
-| 6-12h | 19.6 | 26.3 | 19.9 | 9.9 | 44.2 | 40.1 | 54.4 |
-| 12-24h | 20.5 | 27.3 | 20.6 | 9.9 | 45.3 | 40.8 | 54.4 |
-| 24-48h | 22.2 | 28.5 | 22.1 | 9.9 | 53.9 | 48.1 | 54.4 |
-| all | 20.9 | 27 | 20.9 | 9.9 | 47.4 | 44.3 | 54.4 |
+|  | Our model (LightGBM + NESO embedded wind/solar) | Previous model (no NESO inputs) | + NESO transmission wind | + wind at each wind-farm point | NESO published forecast* | Last known actual | Same slot, last known day | Same slot, last week |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0-6h | 17.6 | 20.8 | 17.9 | 17 | 9.9 | 28.9 | 40.1 | 54.3 |
+| 6-12h | 19.6 | 26.3 | 19.9 | 17.9 | 9.9 | 44.2 | 40.1 | 54.4 |
+| 12-24h | 20.5 | 27.3 | 20.6 | 18.4 | 9.9 | 45.3 | 40.8 | 54.4 |
+| 24-48h | 22.2 | 28.5 | 22.1 | 19.6 | 9.9 | 53.9 | 48.1 | 54.4 |
+| all | 20.9 | 27 | 20.9 | 18.7 | 9.9 | 47.4 | 44.3 | 54.4 |
 
 \* **Read the NESO column with care.** The API only keeps NESO's *final* published forecast for
 each half-hour, not when it was made, so it is likely a short-lead forecast. That makes it a
@@ -41,13 +44,13 @@ at long leads to be somewhat higher than this backtest.
 
 **Bias** (mean of forecast minus actual, gCO₂/kWh; + = too high), by lead and by month:
 
-|  | Our model (LightGBM + NESO embedded wind/solar) | Previous model (no NESO inputs) | + NESO transmission wind | NESO published forecast* | Last known actual | Same slot, last known day | Same slot, last week |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| 0-6h | 0.4 | 2.9 | 0.3 | 0.1 | 0.2 | 0.2 | 0.7 |
-| 6-12h | 0.8 | 6 | 0.6 | 0.2 | 0.1 | 0.1 | 0.7 |
-| 12-24h | 1.1 | 7.4 | 1.1 | 0.2 | 0.2 | 0 | 0.7 |
-| 24-48h | 1.6 | 7.9 | 2.1 | 0.1 | 0.1 | -0 | 0.6 |
-| all | 1.3 | 6.9 | 1.4 | 0.1 | 0.1 | 0 | 0.6 |
+|  | Our model (LightGBM + NESO embedded wind/solar) | Previous model (no NESO inputs) | + NESO transmission wind | + wind at each wind-farm point | NESO published forecast* | Last known actual | Same slot, last known day | Same slot, last week |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 0-6h | 0.4 | 2.9 | 0.3 | 1.1 | 0.1 | 0.2 | 0.2 | 0.7 |
+| 6-12h | 0.8 | 6 | 0.6 | 1.7 | 0.2 | 0.1 | 0.1 | 0.7 |
+| 12-24h | 1.1 | 7.4 | 1.1 | 1.9 | 0.2 | 0.2 | 0 | 0.7 |
+| 24-48h | 1.6 | 7.9 | 2.1 | 2.4 | 0.1 | 0.1 | -0 | 0.6 |
+| all | 1.3 | 6.9 | 1.4 | 2 | 0.1 | 0.1 | 0 | 0.6 |
 
 |  | Our model (LightGBM + NESO embedded wind/solar) | Previous model (no NESO inputs) | NESO published forecast* |
 | --- | --- | --- | --- |
@@ -74,6 +77,7 @@ the actual intensity in that block with the truly cleanest block. Regret is the 
 | Our model (LightGBM + NESO embedded wind/solar) | 6.7 | 0.662 |
 | Previous model (no NESO inputs) | 9.57 | 0.558 |
 | + NESO transmission wind | 6.74 | 0.672 |
+| + wind at each wind-farm point | 5.86 | 0.674 |
 | NESO published forecast* | 2.99 | 0.83 |
 | Last known actual | 57.5 | 0.128 |
 | Same slot, last known day | 30.4 | 0.295 |
@@ -88,6 +92,7 @@ only if the whole interval is below zero.
 | --- | --- | --- | --- |
 | Previous model (no NESO inputs) | 6.07 | 4.83 | 7.26 |
 | + NESO transmission wind | 0.05 | -0.16 | 0.23 |
+| + wind at each wind-farm point | -2.13 | -2.76 | -1.5 |
 
 **What drives the model** (share of total gain):
 

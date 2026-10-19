@@ -38,7 +38,8 @@ class WeatherPoint:
     role: str  # why this point matters for the grid
 
 
-WEATHER_POINTS: tuple[WeatherPoint, ...] = (
+# The points the live features and dbt averages use; observed and snapshot fetches need no more.
+GRID_POINTS: tuple[WeatherPoint, ...] = (
     WeatherPoint("north_scotland", 57.48, -4.22, "onshore wind + hydro"),
     WeatherPoint("south_scotland", 55.86, -4.25, "onshore wind, demand"),
     WeatherPoint("north_sea_offshore", 53.90, 1.80, "offshore wind (Dogger/Hornsea area)"),
@@ -47,6 +48,20 @@ WEATHER_POINTS: tuple[WeatherPoint, ...] = (
     WeatherPoint("london", 51.51, -0.13, "demand, solar"),
     WeatherPoint("south_england_solar", 51.06, -1.80, "solar farms"),
 )
+WEATHER_POINTS: tuple[WeatherPoint, ...] = GRID_POINTS + (
+    # Wind-farm clusters (coordinates from Wikipedia's UK offshore wind farm list, Oct 2026), each
+    # a separate forecast input so the model learns their weight instead of us typing capacities.
+    WeatherPoint("moray_firth_offshore", 58.10, -2.95, "offshore wind (Beatrice, Moray E/W)"),
+    WeatherPoint("forth_offshore", 56.55, -1.85, "offshore wind (Seagreen, Neart na Gaoithe)"),
+    WeatherPoint("dogger_bank_offshore", 54.85, 1.80, "offshore wind (Dogger Bank)"),
+    WeatherPoint("irish_sea_offshore", 54.05, -3.55, "offshore wind (Walney, West of Duddon)"),
+    WeatherPoint("lincs_offshore", 53.35, 0.95, "offshore wind (Triton Knoll, Race Bank)"),
+    WeatherPoint("east_anglia_offshore", 52.10, 2.20, "offshore wind (East Anglia, Gabbard)"),
+    WeatherPoint("thames_offshore", 51.64, 1.55, "offshore wind (London Array)"),
+    WeatherPoint("southern_uplands", 55.40, -3.55, "onshore wind (Clyde area)"),
+)
+# Points whose wind speed is a separate forecast input (forecast.WIND_POINT_FEATURES).
+WIND_POINTS = tuple(p.point_id for p in WEATHER_POINTS if "wind" in p.role)
 
 WEATHER_COLUMNS = ["time", "point_id", "latitude", "longitude", *HOURLY_VARS]
 
@@ -127,7 +142,7 @@ def fetch_weather_observed(
     client: ApiClient,
     start: datetime,
     end: datetime,
-    points: tuple[WeatherPoint, ...] = WEATHER_POINTS,
+    points: tuple[WeatherPoint, ...] = GRID_POINTS,
 ) -> pd.DataFrame:
     return _fetch_range(client, ARCHIVE_URL, start, end, OBSERVED_MAX_DAYS, points)
 
@@ -144,7 +159,7 @@ def fetch_weather_historical_forecast(
 
 
 def fetch_weather_forecast(
-    client: ApiClient, issued_at: datetime, points: tuple[WeatherPoint, ...] = WEATHER_POINTS
+    client: ApiClient, issued_at: datetime, points: tuple[WeatherPoint, ...] = GRID_POINTS
 ) -> pd.DataFrame:
     """Snapshot of the live forecast (next ~3 days) as seen at `issued_at`."""
     issued_at = floor_hour(ensure_utc(issued_at))

@@ -16,6 +16,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from gridcarbon.extract.weather import WIND_POINTS
+
 HORIZON = 96  # half-hours = 48 h
 STEP = pd.Timedelta(minutes=30)
 ACTUAL_LAG = pd.Timedelta(hours=1)  # actuals publish late: never use the last hour before issue
@@ -40,6 +42,9 @@ NESO_FEATURES = ["neso_wind_mw", "neso_embedded_wind_mw", "neso_embedded_solar_m
 # archive only covers the day it is published, so most 48 h targets have no vintage. Revisit once
 # raw.neso_wind_14d_snapshots has a few weeks of history.
 FEATURES = BASE_FEATURES + ["neso_embedded_wind_mw", "neso_embedded_solar_mw"]
+# Forecast wind speed at each wind point (extract/weather.py WIND_POINTS), separately: the GB
+# average hides calm in one cluster while another blows. Candidate inputs, not yet live.
+WIND_POINT_FEATURES = [f"wind_{p}" for p in WIND_POINTS]
 NESO_LAG = pd.Timedelta(minutes=30)  # allowance for publication after Forecast_Timestamp
 NESO_SQL = {
     "raw.neso_wind_forecast": "forecast_mw as neso_wind_mw",
@@ -49,8 +54,10 @@ NESO_SQL = {
 log = logging.getLogger(__name__)
 HOLIDAYS_CSV = Path(__file__).resolve().parents[2] / "dbt" / "seeds" / "uk_bank_holidays.csv"
 
-# Same point roles as dbt/models/intermediate/int_weather_gb.sql, applied to forecast weather.
-GB_WEATHER_SQL = """
+# The three averages use the same point roles as dbt/models/intermediate/int_weather_gb.sql;
+# then one wind-speed column per WIND_POINTS entry (WIND_POINT_FEATURES).
+GB_WEATHER_SQL = (
+    """
     select time as hour_utc,
         avg(wind_speed_100m) filter (
             where point_id in ('north_scotland', 'south_scotland', 'north_sea_offshore')
@@ -60,10 +67,16 @@ GB_WEATHER_SQL = """
         ) as solar_radiation,
         avg(temperature_2m) filter (
             where point_id in ('manchester', 'birmingham', 'london')
-        ) as temperature
+        ) as temperature"""
+    + "".join(
+        f",\n        max(wind_speed_100m) filter (where point_id = '{p}') as wind_{p}"
+        for p in WIND_POINTS
+    )
+    + """
     from {table} {where}
     group by 1 order by 1
 """
+)
 
 
 def holidays() -> set:
@@ -156,6 +169,7 @@ def features(
             "wind_speed": weather["wind_speed"].to_numpy(),
             "solar_radiation": weather["solar_radiation"].to_numpy(),
             "temperature": weather["temperature"].to_numpy(),
+            **{c: weather[c].to_numpy() for c in WIND_POINT_FEATURES},
             "y": y.reindex(target).to_numpy(),
             "neso": grid["neso"].reindex(target).to_numpy(),
         }

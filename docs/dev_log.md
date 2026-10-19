@@ -247,3 +247,28 @@ ours) against actuals later.
   greenest-window regret (about 3 g CO₂ on a 7 kWh EV charge), against a 3 GB dependency in the
   hourly run, a second model to maintain, and a backtest-to-live gap bigger than the gain. The
   script stays so it can be re-run in a few minutes if the inputs change a lot.
+
+## 2026-10-19: wind speed at each wind-farm point (candidate `model_wind_points`)
+
+- **Question:** the model sees GB wind as one average over 3 points. Does it do better when it
+  sees forecast 100 m wind speed at each wind area as its own input and learns their weights
+  itself, rather than us typing in capacities? 8 points were added to `WEATHER_POINTS`: 7
+  offshore clusters (Moray Firth, Forth, Dogger Bank, Irish Sea, Lincs, East Anglia, Thames)
+  and the Southern Uplands. That makes 11 wind inputs (`forecast.WIND_POINT_FEATURES`),
+  including the 3 already averaged. The `cloud_cover_pct` average stays on the original 7 points
+  so the existing series doesn't shift.
+- **Backfill:** historical forecasts from 2022-01-01 for all 15 points (317,967 new rows). Every
+  point has 42,064 hours with no nulls. A resume run skipped the new points at first, because
+  their windows were already in `meta.load_log`, so it was re-run with `--no-resume`.
+- **Result: better, and the interval is entirely below zero.** MAE was 18.7 vs 20.9 for the live
+  model: -2.13, with a 95% interval of -2.76 to -1.50. It is better at every lead band (17.0 / 17.9 /
+  18.4 / 19.6 vs 17.6 / 19.6 / 20.5 / 22.2) and its greenest-3h-window regret is 5.86 vs 6.70.
+- **Caveat:** the gain grows with lead time, from 0.6 at 0-6 h to 2.6 at 24-48 h. Long leads are
+  where Open-Meteo's historical forecasts flatter us most, because they are stitched from the
+  first hours of each run. Expect the live gain at long leads to be smaller.
+- **Decision: go, as a separate change.** It switches `FEATURES`, bumps the model version and
+  backfills MotherDuck before the live model reads the new points. If a point's forecast is missing,
+  the model falls back to NaN (LightGBM handles it) rather than failing the run.
+- **Quota:** Open-Meteo bills each location separately, so only the historical forecast (which
+  the model trains on) requests the wind-farm points. The hourly observed and live snapshot
+  fetches stay on the original 7 (`GRID_POINTS`) until a live feature needs more.

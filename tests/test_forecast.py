@@ -16,10 +16,44 @@ def spine(days: int, values=None) -> pd.DataFrame:
 def hourly_weather(days: int) -> pd.DataFrame:
     idx = pd.date_range(START, periods=days * 24, freq="h")
     rng = np.random.default_rng(0)
+    wind = rng.uniform(0, 60, len(idx))
     return pd.DataFrame(
-        {"wind_speed": rng.uniform(0, 60, len(idx)), "solar_radiation": 0.0, "temperature": 10.0},
+        {"wind_speed": wind, "solar_radiation": 0.0, "temperature": 10.0}
+        | dict.fromkeys(fc.WIND_POINT_FEATURES, wind),
         index=idx,
     )
+
+
+def test_weather_sql_has_a_wind_column_per_wind_point():
+    import duckdb
+
+    con = duckdb.connect()
+    con.execute(
+        "create table w (time timestamptz, point_id varchar, wind_speed_100m double, "
+        "shortwave_radiation double, temperature_2m double)"
+    )
+    t = START.to_pydatetime()
+    con.executemany(
+        "insert into w values (?, ?, ?, 0, 10)",
+        [(t, "dogger_bank_offshore", 30.0), (t, "north_scotland", 12.0)],
+    )
+    wx = con.sql(fc.GB_WEATHER_SQL.format(table="w", where="")).df().set_index("hour_utc")
+    assert set(fc.WIND_POINT_FEATURES) <= set(wx.columns)
+    # Each point's own speed, not an average; points with no row stay NULL rather than 0.
+    assert wx["wind_dogger_bank_offshore"].iloc[0] == 30.0
+    assert wx["wind_north_scotland"].iloc[0] == 12.0
+    assert pd.isna(wx["wind_thames_offshore"].iloc[0])
+
+
+def test_wind_points_are_pinned():
+    # WIND_POINTS comes from role strings; pin it so a role edit can't quietly change model inputs.
+    expected = (
+        "north_scotland", "south_scotland", "north_sea_offshore", "moray_firth_offshore",
+        "forth_offshore", "dogger_bank_offshore", "irish_sea_offshore", "lincs_offshore",
+        "east_anglia_offshore", "thames_offshore", "southern_uplands",
+    )  # fmt: skip
+    assert [f"wind_{p}" for p in expected] == fc.WIND_POINT_FEATURES
+    assert not set(fc.WIND_POINT_FEATURES) & set(fc.FEATURES)
 
 
 def test_features_never_use_data_after_issue_minus_lag():
@@ -333,3 +367,16 @@ def test_window_regret_can_skip_partly_scored_issues():
     preds.loc[(preds["issued_at"] == preds["issued_at"].max()) & (preds["lead"] > 10), "y"] = np.nan
     assert len(fc.window_regret(preds, ["b"])) == 30
     assert len(fc.window_regret(preds, ["b"], full_horizon=True)) == 29
+
+
+def test_fit_tolerates_all_missing_wind_point_columns():
+    # Live state on MotherDuck until the wind-farm points are backfilled: every wind_* is NaN.
+    pytest.importorskip("lightgbm")
+    grid = spine(30)
+    wx = hourly_weather(30)
+    wx[fc.WIND_POINT_FEATURES] = np.nan
+    cols = fc.FEATURES + fc.WIND_POINT_FEATURES
+    model = fc.fit(fc.training_rows(grid, wx, set(), START + pd.Timedelta(days=25)), cols)
+    test = fc.features(grid, wx, pd.DatetimeIndex([START + pd.Timedelta(days=27)]), set())
+    assert test[fc.WIND_POINT_FEATURES].isna().all().all()
+    assert np.isfinite(model.predict(test[cols])).all()
