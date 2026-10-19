@@ -38,7 +38,7 @@ class WeatherPoint:
     role: str  # why this point matters for the grid
 
 
-# The points the live features and dbt averages use; observed and snapshot fetches need no more.
+# The points the dbt averages use; the observed fetch needs no more.
 GRID_POINTS: tuple[WeatherPoint, ...] = (
     WeatherPoint("north_scotland", 57.48, -4.22, "onshore wind + hydro"),
     WeatherPoint("south_scotland", 55.86, -4.25, "onshore wind, demand"),
@@ -159,7 +159,7 @@ def fetch_weather_historical_forecast(
 
 
 def fetch_weather_forecast(
-    client: ApiClient, issued_at: datetime, points: tuple[WeatherPoint, ...] = GRID_POINTS
+    client: ApiClient, issued_at: datetime, points: tuple[WeatherPoint, ...] = WEATHER_POINTS
 ) -> pd.DataFrame:
     """Snapshot of the live forecast (next ~3 days) as seen at `issued_at`."""
     issued_at = floor_hour(ensure_utc(issued_at))

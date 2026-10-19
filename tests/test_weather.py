@@ -55,17 +55,17 @@ def test_a_missing_variable_fails_instead_of_loading_nulls(fixture_json):
         wx.parse_locations(payload, TWO_POINTS)
 
 
-def test_observed_and_snapshot_fetch_only_the_grid_points():
-    # Open-Meteo bills per location: the wind-farm points are only needed in the historical
-    # forecast (model training), so the hourly observed and snapshot fetches skip them.
+def test_only_the_observed_fetch_skips_the_wind_farm_points():
+    # Open-Meteo bills per location: the model needs the wind-farm points in training (historical
+    # forecast) and live (snapshot); observed weather only feeds the dbt averages.
     import inspect
 
-    for fetch in (wx.fetch_weather_observed, wx.fetch_weather_forecast):
-        assert inspect.signature(fetch).parameters["points"].default == wx.GRID_POINTS
-    assert (
-        inspect.signature(wx.fetch_weather_historical_forecast).parameters["points"].default
-        == wx.WEATHER_POINTS
-    )
+    def default(fetch):
+        return inspect.signature(fetch).parameters["points"].default
+
+    assert default(wx.fetch_weather_observed) == wx.GRID_POINTS
+    assert default(wx.fetch_weather_forecast) == wx.WEATHER_POINTS
+    assert default(wx.fetch_weather_historical_forecast) == wx.WEATHER_POINTS
     assert len(wx.GRID_POINTS) == 7
 
 

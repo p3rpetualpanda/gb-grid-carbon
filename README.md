@@ -47,8 +47,8 @@ From [`docs/findings.md`](docs/findings.md) (every number computed by `analysis/
 
 A direct multi-horizon LightGBM model predicts all 96 half-hours of the next 48 h from the
 calendar, recent actuals, forecast weather and NESO's own embedded wind/solar forecasts. Over a 12-month
-rolling-origin backtest (last run <!-- bt:run_date -->2026-10-19<!-- /bt -->) its MAE is **<!-- bt:model_mae -->20.9<!-- /bt --> gCO₂/kWh**,
-**<!-- bt:improvement -->53%<!-- /bt --> better** than the best naïve baseline (<!-- bt:best_baseline_mae -->44.3<!-- /bt -->), and it beats "repeat the last
+rolling-origin backtest (last run <!-- bt:run_date -->2026-10-19<!-- /bt -->) its MAE is **<!-- bt:model_mae -->18.7<!-- /bt --> gCO₂/kWh**,
+**<!-- bt:improvement -->58%<!-- /bt --> better** than the best naïve baseline (<!-- bt:best_baseline_mae -->44.3<!-- /bt -->), and it beats "repeat the last
 actual" at every lead time. NESO's published forecast scores <!-- bt:neso_mae -->9.9<!-- /bt -->, but the API keeps only NESO's *final*, short-lead forecast, so the fair comparison is the
 **live track record**: both forecasts issued in the same pipeline run, scored when actuals arrive
 (`marts.fct_model_vs_official`, shown in the dashboard). Leakage rules (publication lag,
@@ -56,11 +56,16 @@ forecast-not-observed weather, train-before-test) are enforced by tests. Details
 [`docs/backtest.md`](docs/backtest.md).
 
 **NESO forecasts as inputs.** NESO's embedded wind/solar forecasts (always the vintage published
-before each forecast) cut the backtest MAE from <!-- bt:previous_model_mae -->27.0<!-- /bt --> to the figure above, better at every lead
-time. NESO's transmission wind forecast is left out: its archive only covers the day each forecast
-is published, so most 48 h targets lack it. If NESO's feed stalls, the pipeline falls back to the
-model without NESO inputs and labels those forecasts `lgbm-direct-v3-fallback`. A NESO portal failure
-or stale NESO data only warns; it never stops the hourly run.
+before each forecast) cut the backtest MAE from <!-- bt:previous_model_mae -->27.0<!-- /bt --> to <!-- bt:v3_model_mae -->20.9<!-- /bt -->. NESO's transmission wind
+forecast is left out: its archive only covers the day each forecast is published, so most 48 h
+targets lack it.
+
+**Wind at each wind-farm cluster.** Forecast wind speed at 11 wind points (8 offshore and onshore
+wind-farm clusters plus the 3 original wind points), each a separate input, cut it again to the
+figure above: a GB average hides calm in one cluster while another blows. If NESO's feed stalls or
+a wind point is missing from the weather snapshot, the pipeline falls back to the model without
+those inputs and labels the forecasts `lgbm-direct-v4-fallback`. A NESO portal failure or stale
+NESO data only warns; it never stops the hourly run.
 
 ## The dashboard
 
@@ -114,7 +119,8 @@ Found by running against the real APIs, not by unit tests (full write-up in
 | 7 | Analysis & findings → [`docs/findings.md`](docs/findings.md) | ✅ Done |
 | 8 | 48h forecast, backtest, live scoring vs NESO → [`docs/backtest.md`](docs/backtest.md) | ✅ Live |
 | 9 | Streamlit dashboard (`app/streamlit_app.py`) → [live](https://gb-grid-carbon-b8k4zy3yzvfzqzxewxzdsk.streamlit.app/) | ✅ Live |
-| 10 | NESO embedded wind/solar forecasts as live model inputs (backtest MAE <!-- bt:previous_model_mae -->27.0<!-- /bt --> → <!-- bt:model_mae -->20.9<!-- /bt -->) | ✅ Live |
+| 10 | NESO embedded wind/solar forecasts as live model inputs (backtest MAE <!-- bt:previous_model_mae -->27.0<!-- /bt --> → <!-- bt:v3_model_mae -->20.9<!-- /bt -->) | ✅ Live |
+| 11 | Forecast wind speed at 11 wind-farm points as live model inputs (backtest MAE <!-- bt:v3_model_mae -->20.9<!-- /bt --> → <!-- bt:model_mae -->18.7<!-- /bt -->) | ✅ Live |
 
 Full plan: [`docs/project_plan.md`](docs/project_plan.md). Decisions and surprises:
 [`docs/dev_log.md`](docs/dev_log.md). CV bullets and interview notes:

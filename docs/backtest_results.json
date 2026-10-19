@@ -2,9 +2,10 @@
   "run_date": "2026-10-19",
   "forecasts": 1348,
   "predictions": 129408,
-  "model_mae": 20.9,
+  "model_mae": 18.7,
   "best_baseline_mae": 44.3,
-  "improvement": 0.528,
+  "improvement": 0.577,
   "neso_mae": 9.9,
-  "previous_model_mae": 27.0
+  "previous_model_mae": 27.0,
+  "v3_model_mae": 20.9
 }

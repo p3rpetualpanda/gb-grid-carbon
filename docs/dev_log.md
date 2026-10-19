@@ -272,3 +272,21 @@ ours) against actuals later.
 - **Quota:** Open-Meteo bills each location separately, so only the historical forecast (which
   the model trains on) requests the wind-farm points. The hourly observed and live snapshot
   fetches stay on the original 7 (`GRID_POINTS`) until a live feature needs more.
+
+## 2026-10-19: wind-farm points go live (`lgbm-direct-v4`)
+
+- **Change:** `FEATURES` now includes the 11 wind-point inputs, so the live model is
+  `lgbm-direct-v4`. For the live model to see them ahead of time, the live weather snapshot
+  (`fetch_weather_forecast`) now requests all 15 points; only the observed fetch stays on the
+  original 7. That adds 8 locations to each run's snapshot request.
+- **Fallback, correcting the entry above:** a missing wind point does not go to LightGBM as NaN.
+  Like a stalled NESO feed, it switches that run to the model on `BASE_FEATURES` only, labelled
+  `lgbm-direct-v4-fallback`, because a model trained with every wind point present has never seen
+  one missing. A test covers this.
+- **MotherDuck:** backfilled with `--no-resume` from 2022-01-01 before the live model reads the
+  points: every one of the 15 points has 42,064 hours up to the current hour.
+- **Backtest (re-run):** v4 18.7, v3 20.9, v2 27.0. The v3 interval vs v4 is 1.50 to 2.76, all
+  above zero, so v4 stays better. Bias over all leads rose from 1.3 (v3) to 2.0; it is small next to
+  the MAE gain, but worth watching on the live track record.
+- **Docs:** README phase 10 now shows v2 → v3 and phase 11 v3 → v4, using a new `v3_model_mae`
+  marker in `backtest_results.json`, so each row keeps the gain it actually made.
