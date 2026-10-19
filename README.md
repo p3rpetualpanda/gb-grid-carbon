@@ -59,7 +59,7 @@ forecast-not-observed weather, train-before-test) are enforced by tests. Details
 before each forecast) cut the backtest MAE from 26.8 to the figure above, better at every lead
 time. NESO's transmission wind forecast is left out: its archive only covers the day each forecast
 is published, so most 48 h targets lack it. If NESO's feed stalls, the pipeline falls back to the
-model without NESO inputs and labels those forecasts `lgbm-direct-v2`.
+model without NESO inputs and labels those forecasts `lgbm-direct-v3-fallback`.
 
 ## The dashboard
 
