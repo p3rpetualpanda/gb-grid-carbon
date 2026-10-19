@@ -11,7 +11,8 @@ _spec.loader.exec_module(docs)
 
 def test_render_replaces_only_marked_numbers():
     vals = docs.values({"run_date": "2026-01-02", "model_mae": 25.04, "best_baseline_mae": 40,
-                        "neso_mae": 9.94, "improvement": 0.374})  # fmt: skip
+                        "neso_mae": 9.94, "improvement": 0.374,
+                        "previous_model_mae": 27.0})  # fmt: skip
     text = "M <!-- bt:model_mae -->26.8<!-- /bt --> is <!-- bt:improvement -->40%<!-- /bt --> 9"
     assert docs.render(text, vals) == (
         "M <!-- bt:model_mae -->25.0<!-- /bt --> is <!-- bt:improvement -->37%<!-- /bt --> 9"

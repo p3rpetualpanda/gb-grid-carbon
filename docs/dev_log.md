@@ -200,3 +200,10 @@ ours) against actuals later.
   installed the newest each run; a new LightGBM would also change live forecasts unannounced.
 - `model_version` is on `fct_model_vs_official` now, so the dashboard and `live_bias.py` no
   longer join `ml.model_forecasts` for it.
+- **Review follow-ups.** The chart keeps the whole issue (trimming it left a gap after the last
+  actual); only the advice uses the half-hours ahead, and its labels say how many hours that is
+  ("next 47 h") instead of always "48 h", with a warning once the issue is over 12 h old. Lead
+  bands are defined once (`BAND_EDGES`), with the SQL built from them and tested to match.
+- **Backtest re-run** for the bounded last actual: the headline is unchanged (20.9 vs 44.3 for
+  the best baseline); the no-NESO model moved 26.8 → 27.0. That figure was typed into the README
+  by hand, so it now comes from `backtest_results.json` (`previous_model_mae`) like the others.

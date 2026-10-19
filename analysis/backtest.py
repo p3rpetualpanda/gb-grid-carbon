@@ -191,6 +191,7 @@ results = {
     "best_baseline_mae": round(float(best_baseline), 1),
     "improvement": round(float(1 - overall["model"] / best_baseline), 3),
     "neso_mae": round(float(overall["neso"]), 1),
+    "previous_model_mae": round(float(overall["model_v2"]), 1),  # v2: no NESO inputs
 }
 (ROOT / "docs" / "backtest_results.json").write_text(
     json.dumps(results, indent=2) + "\n", encoding="utf-8"
