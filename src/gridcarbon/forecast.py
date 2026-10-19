@@ -148,7 +148,8 @@ def features(
             "iso_weekday": local.dayofweek + 1,
             "month": local.month,
             "is_holiday": pd.Index(local.date).isin(hols).astype(int),
-            "last_actual": y.ffill().reindex(last_known).to_numpy(),
+            # Bridge up to 2 h of unpublished actuals; an older value is not "the last actual".
+            "last_actual": y.ffill(limit=4).reindex(last_known).to_numpy(),
             "mean_24h": y.rolling(48, min_periods=24).mean().reindex(last_known).to_numpy(),
             "lag_day": y.reindex(target - pd.to_timedelta(days_back, unit="D")).to_numpy(),
             "lag_week": y.reindex(target - pd.Timedelta(days=7)).to_numpy(),

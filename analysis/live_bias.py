@@ -1,7 +1,7 @@
 """Live track record by model version: MAE and bias by lead band and by day, our model vs NESO.
 
 Reads marts.fct_model_vs_official (forecasts issued in the same pipeline run, scored once the
-actual is published) and ml.model_forecasts (for model_version). Read-only.
+actual is published). Read-only.
 
     python analysis/live_bias.py                       # local warehouse
     DB_TARGET=motherduck python analysis/live_bias.py  # the live warehouse (token from .env)
@@ -44,10 +44,9 @@ def scored(con, since: str | None) -> pd.DataFrame:
         params.append(since)
     return con.execute(
         f"""
-        select m.model_version, f.issued_at, f.period_from, f.lead,
+        select f.model_version, f.issued_at, f.period_from, f.lead,
                f.model_gco2_kwh as model, f.neso_gco2_kwh as neso, f.actual_gco2_kwh as y
         from marts.fct_model_vs_official as f
-        join ml.model_forecasts as m using (issued_at, period_from)
         where {where}
         """,
         params,

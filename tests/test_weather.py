@@ -46,3 +46,10 @@ def test_all_null_hours_are_dropped(client, fixture_json):
     responses.add(responses.GET, wx.ARCHIVE_URL, json=payload)
     df = wx.fetch_weather_observed(client, utc(2024, 1, 1), utc(2024, 1, 2), TWO_POINTS)
     assert len(df) == (24 - 6) * 2
+
+
+def test_a_missing_variable_fails_instead_of_loading_nulls(fixture_json):
+    payload = fixture_json("weather_archive.json")
+    del payload[0]["hourly"]["wind_speed_100m"]  # e.g. Open-Meteo renames it
+    with pytest.raises(ValueError, match="wind_speed_100m"):
+        wx.parse_locations(payload, TWO_POINTS)

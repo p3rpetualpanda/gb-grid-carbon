@@ -181,3 +181,22 @@ ours) against actuals later.
   and hover values.
 - **Windows wrap past midnight.** In winter the cleanest block is overnight, so the window search
   runs over two copies of the typical day (`day_windows`, tested); a 23:00-02:00 block counts.
+
+## 2026-10-19: audit fixes
+
+- **Advice only from now on.** The dashboard showed the latest issue from its first half-hour,
+  but that issue is as old as the last pipeline run (1-4 h), so the "cleanest window" could
+  already have started. `upcoming` drops the past half-hours; if under 8 h of forecast is left
+  (the pipeline is far behind) the page keeps the whole issue and says so.
+- **Typical day weighted by days.** The greenest tab averaged the weekday and weekend means
+  equally, counting weekends as half of all days and making every month look cleaner. Now
+  weighted by half-hour counts (`typical_day`, tested).
+- **No stale "last actual".** The latest actual was forward-filled without limit, so after a
+  6 h publication outage the short-lead forecast copied a 6 h old value at full weight. It now
+  bridges at most 2 h; beyond that the persistence blend switches off.
+- **Missing weather variables fail.** A variable absent from an Open-Meteo reply used to load as
+  NULLs the model would quietly ignore; the parser now raises.
+- **Pinned DuckDB and LightGBM.** MotherDuck supports specific DuckDB versions, and the pipeline
+  installed the newest each run; a new LightGBM would also change live forecasts unannounced.
+- `model_version` is on `fct_model_vs_official` now, so the dashboard and `live_bias.py` no
+  longer join `ml.model_forecasts` for it.

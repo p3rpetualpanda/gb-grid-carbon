@@ -68,6 +68,9 @@ def parse_locations(payload, points: tuple[WeatherPoint, ...]) -> list[dict]:
     rows = []
     for point, raw in zip(points, locations, strict=True):
         loc = OpenMeteoLocation.model_validate(raw)
+        missing = [var for var in HOURLY_VARS if var not in loc.hourly]
+        if missing:  # a renamed variable would otherwise load as NULLs the model quietly ignores
+            raise ValueError(f"Open-Meteo response for {point.point_id} lacks {missing}")
         for i, t in enumerate(loc.hourly["time"]):
             row = {
                 "time": datetime.fromisoformat(t).replace(tzinfo=UTC),
@@ -76,7 +79,7 @@ def parse_locations(payload, points: tuple[WeatherPoint, ...]) -> list[dict]:
                 "longitude": point.longitude,
             }
             for var in HOURLY_VARS:
-                row[var] = loc.hourly[var][i] if var in loc.hourly else None
+                row[var] = loc.hourly[var][i]
             rows.append(row)
     return rows
 
