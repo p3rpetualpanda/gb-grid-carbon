@@ -156,6 +156,21 @@ ours) against actuals later.
   model, so the 6 pre-v3 forecasts on 18 Oct looked like fallback runs. None were: every run
   since v3 merged used v3. The fallback is now `lgbm-direct-v3-fallback`.
 
+## 2026-10-19: review fixes and a retry for non-JSON replies
+
+- **Retry a 200 that isn't JSON.** Twice in a day (18 Oct 17:17, 19 Oct 01:21) Open-Meteo answered
+  200 with a body that wasn't JSON, and the whole pipeline run failed. `ApiClient` now treats
+  that as transient and retries it like a 5xx; if it never parses, the run still fails loudly.
+- **Bootstrap minimum 20 -> 45 days.** 20 days is about 7 three-day blocks, too few for an honest
+  percentile interval. `live_bias.py` says "no interval yet" until 45 days are scored.
+- **Regret on fully scored issues only in `live_bias.py`** (`window_regret(full_horizon=True)`).
+  Recent issues have actuals for their first hours only, so they were judged on near-term
+  windows and made versions with many recent issues look different for no real reason.
+- **NESO coverage logged, fallback kept strict.** 99.9% of v3's training rows have NESO embedded
+  inputs (checked on the local warehouse), so a live row without them is something the model has
+  barely seen; falling back for the whole issue is the right call. `predict_live` now logs the
+  coverage share each run so a thinning history would show up.
+
 ## 2026-10-19: "When is it greenest?" tab reworked
 
 - **From one heatmap to an answer.** The tab now asks for a month and a task length, then states
