@@ -203,3 +203,108 @@ def test_predict_live_falls_back_without_a_full_neso_vintage(monkeypatch):
     out = fc.predict_live(con, issue.to_pydatetime())
     assert list(seen["X"].columns) == fc.BASE_FEATURES
     assert (out["model_version"] == fc.FALLBACK_VERSION).all()
+
+
+def scored_preds(days: int = 60, seed: int = 0) -> pd.DataFrame:
+    """Synthetic backtest output: one issue per day, 48 half-hourly targets each, with errors
+    that share a per-day offset (as real forecast errors do)."""
+    rng = np.random.default_rng(seed)
+    issued = pd.date_range(START, periods=days, freq="D")
+    rows = pd.DataFrame({
+        "issued_at": issued.repeat(48),
+        "lead": np.tile(np.arange(1, 49), days),
+    })  # fmt: skip
+    rows["period_from"] = rows["issued_at"] + (rows["lead"] - 1) * fc.STEP
+    rows["y"] = 150 + 50 * np.sin(rows["lead"] / 48 * 2 * np.pi) + rng.normal(0, 5, len(rows))
+    day_offset = np.repeat(rng.normal(0, 15, days), 48)
+    rows["a"] = rows["y"] + day_offset + rng.normal(0, 5, len(rows))
+    return rows
+
+
+def test_paired_bootstrap_interval_covers_a_known_gap_and_excludes_zero():
+    preds = scored_preds()
+    err = preds["a"] - preds["y"]
+    preds["b"] = preds["y"] + err + 3 * np.sign(err)  # every error exactly 3 bigger
+    diff, lo, hi = fc.paired_bootstrap(preds, "a", "b", n=500)
+    assert diff == pytest.approx(-3)
+    assert lo == pytest.approx(-3) and hi == pytest.approx(-3)
+
+
+def test_paired_bootstrap_interval_covers_a_noisy_gap():
+    preds = scored_preds(days=90)
+    rng = np.random.default_rng(1)
+    err = preds["a"] - preds["y"]
+    extra = 3 + np.repeat(rng.normal(0, 4, 90), 48)  # 3 worse on average, varying by day
+    preds["b"] = preds["y"] + err + np.sign(err) * extra.clip(min=0)
+    diff, lo, hi = fc.paired_bootstrap(preds, "a", "b", n=1000)
+    assert lo < diff < hi < 0 and lo < -3 * 0.6 and hi > -3 * 1.6
+
+
+def test_paired_bootstrap_of_a_forecast_with_itself_is_zero():
+    preds = scored_preds()
+    assert fc.paired_bootstrap(preds, "a", "a", n=200) == (0.0, 0.0, 0.0)
+
+
+def test_paired_bootstrap_resamples_blocks_of_days_not_half_hours():
+    # One day carries the whole gap: resampling blocks of days must give a wide interval that
+    # reaches 0 (draws without that day); resampling half-hours would give hi near -12.
+    preds = scored_preds(days=30)
+    preds["b"] = preds["a"]
+    first_day = preds["issued_at"] == preds["issued_at"].min()
+    preds.loc[first_day, "b"] = preds.loc[first_day, "y"] + 500
+    _, lo, hi = fc.paired_bootstrap(preds, "a", "b", n=500)
+    assert lo < -10 and hi == pytest.approx(0, abs=1e-9)
+
+
+def test_paired_bootstrap_refuses_too_few_days():
+    with pytest.raises(ValueError, match="need 20"):
+        fc.paired_bootstrap(scored_preds(days=10), "a", "a")
+
+
+def test_window_regret_is_zero_when_the_forecast_is_off_by_a_constant():
+    preds = scored_preds()
+    preds["shifted"] = preds["y"] + 40  # wrong level, right shape: same greenest window
+    regret = fc.window_regret(preds, ["shifted"], hours=3)
+    assert len(regret) == preds["issued_at"].nunique()
+    assert regret["shifted"].abs().max() == pytest.approx(0)
+
+
+def test_window_regret_measures_how_much_dirtier_the_chosen_window_was():
+    preds = scored_preds(days=1)
+    preds["y"] = 100.0
+    preds.loc[preds["lead"].between(11, 16), "y"] = 40.0  # truly greenest 3 h: leads 11-16
+    preds["fc"] = 100.0
+    preds.loc[preds["lead"].between(31, 36), "fc"] = 10.0  # forecast picks leads 31-36 (actual 100)
+    assert fc.window_regret(preds, ["fc"], hours=3)["fc"].iloc[0] == pytest.approx(60)
+
+
+def test_window_regret_skips_windows_with_a_gap_and_scores_columns_on_the_same_windows():
+    preds = scored_preds(days=1)
+    preds["y"] = 100.0
+    preds.loc[preds["lead"].between(11, 16), "y"] = 40.0  # truly greenest: leads 11-16
+    preds["full"] = preds["y"]  # perfect forecast
+    preds["patchy"] = preds["y"]
+    preds.loc[preds["lead"] == 13, "patchy"] = np.nan  # can't see the best window
+    regret = fc.window_regret(preds, ["full", "patchy"], hours=3)
+    # Leads 11-16 are excluded for both, so both are scored only on the remaining windows.
+    assert regret["full"].iloc[0] == pytest.approx(0)
+    assert regret["patchy"].iloc[0] == pytest.approx(0)
+    assert len(fc.window_regret(preds[preds["lead"] < 3], ["full"], hours=3)) == 0  # no window
+
+
+def test_window_regret_picks_the_same_window_as_the_dashboard():
+    import importlib.util
+    from pathlib import Path
+
+    spec = importlib.util.spec_from_file_location(
+        "streamlit_app", Path(__file__).resolve().parents[1] / "app" / "streamlit_app.py"
+    )
+    app = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(app)
+    preds = scored_preds(days=2, seed=3)
+    preds = preds[preds["issued_at"] == preds["issued_at"].min()]
+    one = preds.set_index("period_from")
+    start, _ = app.greenest_window(one["a"], 3)
+    end = start + 5 * fc.STEP
+    expected = one.loc[start:end, "y"].mean() - one["y"].rolling(6).mean().min()
+    assert fc.window_regret(preds, ["a"], hours=3)["a"].iloc[0] == pytest.approx(expected)
