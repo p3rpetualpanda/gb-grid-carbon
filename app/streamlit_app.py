@@ -362,69 +362,116 @@ def main() -> None:
             group by all
         """)
         months = list(pd.date_range("2024-01-01", periods=12, freq="MS").strftime("%B"))
-        c1, c2 = st.columns(2)
-        month = c1.selectbox("Month", months, index=pd.Timestamp.now(TZ).month - 1)
-        task_h = c2.select_slider("How long does your task run?", [0.5, 1, 2, 3, 4, 6, 8],
-                                  value=3, format_func=lambda h: f"{h:g} h")  # fmt: skip
-        m = months.index(month) + 1
+        # Only months with every half-hour slot (a short history or a gap leaves some out).
         by_slot = typical.groupby(["month", "halfhour_slot"]).g.mean().unstack()
+        by_slot = by_slot.reindex(columns=range(48)).dropna()
+        if by_slot.empty:  # st.stop() here would also blank every later tab
+            st.info("Not enough history yet to show typical days.")
+        else:
+            options = [months[i - 1] for i in by_slot.index]
+            this_month = months[pd.Timestamp.now(TZ).month - 1]
+            c1, c2 = st.columns(2)
+            month = c1.selectbox(
+                "Month",
+                options,
+                index=options.index(this_month) if this_month in options else len(options) - 1,
+            )
+            task_h = c2.select_slider(
+                "How long does your task run?",
+                [0.5, 1, 2, 3, 4, 6, 8],
+                value=3,
+                format_func=lambda h: f"{h:g} h",
+            )
+            m = months.index(month) + 1
 
-        def window(day: pd.Series, best: bool) -> tuple[str, float]:
-            means = day_windows(day, task_h)
-            start = means.idxmin() if best else means.idxmax()
-            return f"{slot_label(start)}–{slot_label(start + round(task_h * 2))}", means[start]
+            def window(day: pd.Series, best: bool) -> tuple[str, float]:
+                means = day_windows(day, task_h)
+                start = means.idxmin() if best else means.idxmax()
+                return f"{slot_label(start)}–{slot_label(start + round(task_h * 2))}", means[start]
 
-        day = by_slot.loc[m]
-        (green_t, green_g), (dirty_t, dirty_g) = window(day, True), window(day, False)
-        c1, c2, c3 = st.columns(3)
-        c1.metric(f"Greenest {task_h:g} h in {month}", green_t, help="UK time, last 12 months")
-        c1.caption(f"Typically {green_g:.0f} gCO₂/kWh")
-        c2.metric(f"Dirtiest {task_h:g} h in {month}", dirty_t)
-        c2.caption(f"Typically {dirty_g:.0f} gCO₂/kWh")
-        c3.metric("Emissions saved by moving it", f"{1 - green_g / dirty_g:.0%}")
-        c3.caption("Greenest instead of dirtiest window, same electricity use")
+            day = by_slot.loc[m]
+            (green_t, green_g), (dirty_t, dirty_g) = window(day, True), window(day, False)
+            c1, c2, c3 = st.columns(3)
+            c1.metric(f"Greenest {task_h:g} h in {month}", green_t, help="UK time, last 12 months")
+            c1.caption(f"Typically {green_g:.0f} gCO₂/kWh")
+            c2.metric(f"Dirtiest {task_h:g} h in {month}", dirty_t)
+            c2.caption(f"Typically {dirty_g:.0f} gCO₂/kWh")
+            c3.metric("Emissions saved by moving it", f"{1 - green_g / dirty_g:.0%}")
+            c3.caption("Greenest instead of dirtiest window, same electricity use")
 
-        # A typical day in the chosen month: weekdays vs weekends, greenest window shaded.
-        sel = typical[typical.month == m].sort_values("halfhour_slot")
-        kinds = {False: "Weekdays", True: "Weekends"}
-        sel = sel.assign(time=sel.halfhour_slot.map(slot_label), kind=sel.is_weekend.map(kinds))
-        fig = px.line(sel, x="time", y="g", color="kind", color_discrete_sequence=[BLUE, ORANGE],
-                      category_orders=dict(kind=list(kinds.values())),
-                      labels=dict(time="UK time", g="gCO₂/kWh", kind=""))  # fmt: skip
-        fig.update_traces(line_width=2, hovertemplate="%{x}: %{y:.0f} gCO₂/kWh")
-        start = day_windows(day, task_h).idxmin()
-        end = start + round(task_h * 2) - 1
-        for x0, x1 in [(start, end)] if end < 48 else [(start, 47), (0, end - 48)]:
-            fig.add_vrect(x0=x0 - 0.5, x1=x1 + 0.5, fillcolor=AQUA, opacity=0.15, line_width=0)
-        fig.add_annotation(x=start, y=1, yref="paper", text="Greenest window", showarrow=False,
-                           xanchor="left", font=dict(color=AQUA))  # fmt: skip
-        fig.update_layout(title=f"A typical day in {month} (average, last 12 months)",
-                          hovermode="x unified", xaxis=dict(nticks=13),
-                          legend=dict(orientation="h", y=1.12, x=1, xanchor="right"))  # fmt: skip
-        st.plotly_chart(fig, width="stretch")
+            # A typical day in the chosen month: weekdays vs weekends, greenest window shaded.
+            sel = typical[typical.month == m].sort_values("halfhour_slot")
+            kinds = {False: "Weekdays", True: "Weekends"}
+            sel = sel.assign(time=sel.halfhour_slot.map(slot_label), kind=sel.is_weekend.map(kinds))
+            fig = px.line(
+                sel,
+                x="time",
+                y="g",
+                color="kind",
+                color_discrete_sequence=[BLUE, ORANGE],
+                category_orders=dict(kind=list(kinds.values())),
+                labels=dict(time="UK time", g="gCO₂/kWh", kind=""),
+            )
+            fig.update_traces(line_width=2, hovertemplate="%{x}: %{y:.0f} gCO₂/kWh")
+            start = day_windows(day, task_h).idxmin()
+            end = start + round(task_h * 2) - 1
+            for x0, x1 in [(start, end)] if end < 48 else [(start, 47), (0, end - 48)]:
+                fig.add_vrect(x0=x0 - 0.5, x1=x1 + 0.5, fillcolor=AQUA, opacity=0.15, line_width=0)
+            fig.add_annotation(
+                x=start,
+                y=1,
+                yref="paper",
+                text="Greenest window",
+                showarrow=False,
+                xanchor="left",
+                font=dict(color=AQUA),
+            )
+            fig.update_layout(
+                title=f"A typical day in {month} (average, last 12 months)",
+                hovermode="x unified",
+                xaxis=dict(nticks=13),
+                legend=dict(orientation="h", y=1.12, x=1, xanchor="right"),
+            )
+            st.plotly_chart(fig, width="stretch")
 
-        # Every month at a glance; hover for values. Darker = dirtier.
-        heat = by_slot.set_axis([months[i - 1][:3] for i in by_slot.index])
-        heat.columns = [slot_label(c) for c in heat.columns]
-        fig = px.imshow(heat, color_continuous_scale=SEQ_BLUE, aspect="auto",
-                        labels=dict(x="UK time", y="", color="gCO₂/kWh"))  # fmt: skip
-        fig.update_traces(xgap=1, ygap=2,
-                          hovertemplate="%{y} %{x}: %{z:.0f} gCO₂/kWh<extra></extra>")  # fmt: skip
-        fig.update_layout(title="Every month: average intensity by time of day "
-                          "(darker = dirtier)", xaxis=dict(nticks=13))  # fmt: skip
-        st.plotly_chart(fig, width="stretch")
+            # Every month at a glance; hover for values. Darker = dirtier.
+            heat = by_slot.set_axis([months[i - 1][:3] for i in by_slot.index])
+            heat.columns = [slot_label(c) for c in heat.columns]
+            fig = px.imshow(
+                heat,
+                color_continuous_scale=SEQ_BLUE,
+                aspect="auto",
+                labels=dict(x="UK time", y="", color="gCO₂/kWh"),
+            )
+            fig.update_traces(
+                xgap=1, ygap=2, hovertemplate="%{y} %{x}: %{z:.0f} gCO₂/kWh<extra></extra>"
+            )
+            fig.update_layout(
+                title="Every month: average intensity by time of day (darker = dirtier)",
+                xaxis=dict(nticks=13),
+            )
+            st.plotly_chart(fig, width="stretch")
 
-        rows = []
-        for mo, d in by_slot.iterrows():
-            (gt, gg), (dt, dg) = window(d, True), window(d, False)
-            rows.append({"Month": months[mo - 1], "Greenest": gt, "gCO₂/kWh": round(gg),
-                         "Dirtiest": dt, "gCO₂/kWh ": round(dg),
-                         "Saving": f"{1 - gg / dg:.0%}"})  # fmt: skip
-        st.markdown(f"**Greenest and dirtiest {task_h:g} h window, by month**")
-        st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch", height=35 * 13 + 3)
-        st.caption("Averages of actual intensity over the last 12 months, UK time. Midday is "
-                   "cleanest from spring to autumn (solar); early evening is dirtiest all year. "
-                   "For the next 48 h, see the Planner tab.")  # fmt: skip
+            rows = []
+            for mo, d in by_slot.iterrows():
+                (gt, gg), (dt, dg) = window(d, True), window(d, False)
+                rows.append(
+                    {
+                        "Month": months[mo - 1],
+                        "Greenest": gt,
+                        "gCO₂/kWh": round(gg),
+                        "Dirtiest": dt,
+                        "gCO₂/kWh ": round(dg),
+                        "Saving": f"{1 - gg / dg:.0%}",
+                    }
+                )
+            st.markdown(f"**Greenest and dirtiest {task_h:g} h window, by month**")
+            st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch", height=35 * 13 + 3)
+            st.caption(
+                "Averages of actual intensity over the last 12 months, UK time. Midday is "
+                "cleanest from spring to autumn (solar); early evening is dirtiest all year. "
+                "For the next 48 h, see the Planner tab."
+            )
 
     with trends_tab:
         daily = q("select date_local, mean_actual_gco2_kwh as g from marts.agg_daily order by 1")
