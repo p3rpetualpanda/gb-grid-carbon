@@ -170,3 +170,14 @@ ours) against actuals later.
   inputs (checked on the local warehouse), so a live row without them is something the model has
   barely seen; falling back for the whole issue is the right call. `predict_live` now logs the
   coverage share each run so a thinning history would show up.
+
+## 2026-10-19: "When is it greenest?" tab reworked
+
+- **From one heatmap to an answer.** The tab now asks for a month and a task length, then states
+  the greenest and dirtiest window of that length (UK time, last 12 months) and the share of
+  emissions saved by moving from one to the other. A typical-day chart splits weekdays from
+  weekends (weekends are much cleaner) and shades the greenest window, and a table lists both
+  windows for every month. The heatmap keeps the all-months view, now with month names, times
+  and hover values.
+- **Windows wrap past midnight.** In winter the cleanest block is overnight, so the window search
+  runs over two copies of the typical day (`day_windows`, tested); a 23:00-02:00 block counts.
