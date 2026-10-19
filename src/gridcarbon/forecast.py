@@ -9,6 +9,7 @@ lead, the target's UK calendar, recent actuals (respecting their publication lag
 from __future__ import annotations
 
 import csv
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -45,6 +46,7 @@ NESO_SQL = {
     "raw.neso_embedded_forecast": "wind_mw as neso_embedded_wind_mw, "
     "solar_mw as neso_embedded_solar_mw",
 }
+log = logging.getLogger(__name__)
 HOLIDAYS_CSV = Path(__file__).resolve().parents[2] / "dbt" / "seeds" / "uk_bank_holidays.csv"
 
 # Same point roles as dbt/models/intermediate/int_weather_gb.sql, applied to forecast weather.
@@ -247,7 +249,12 @@ def predict_live(con, now: datetime) -> pd.DataFrame:
     cols, version = FEATURES, MODEL_VERSION
     if rows[FEATURES].drop(columns=BASE_FEATURES).isna().any().any():
         cols, version = BASE_FEATURES, FALLBACK_VERSION
-    model = fit(training_rows(grid, wx_hist, hols, issue, neso), cols)
+    train = training_rows(grid, wx_hist, hols, issue, neso)
+    # Training rows before NESO's archives start have NaN inputs while live rows never do: log
+    # the share covered so a thin history shows up in the pipeline log.
+    covered = train[FEATURES].drop(columns=BASE_FEATURES).notna().all(axis=1).mean()
+    log.info("forecast %s: %.0f%% of training rows have NESO inputs", version, 100 * covered)
+    model = fit(train, cols)
     yhat = blend(rows, model.predict(rows[cols]))
     return pd.DataFrame(
         {
@@ -283,7 +290,7 @@ def paired_bootstrap(
     n: int = 1000,
     seed: int = 0,
     block_days: int = 3,
-    min_days: int = 20,
+    min_days: int = 45,  # 15 blocks: fewer make a lumpy, falsely tight percentile interval
 ) -> tuple[float, float, float]:
     """MAE(a) - MAE(b) on rows where both exist, with a 95% interval from resampling blocks of
     `block_days` consecutive UK days of targets. Errors move together within a day and weather
@@ -307,14 +314,20 @@ def paired_bootstrap(
     return float(gap.sum() / count.sum()), float(lo), float(hi)
 
 
-def window_regret(preds: pd.DataFrame, cols: list[str], hours: float = 3) -> pd.DataFrame:
+def window_regret(
+    preds: pd.DataFrame, cols: list[str], hours: float = 3, full_horizon: bool = False
+) -> pd.DataFrame:
     """Per issue and forecast column: how much dirtier (gCO2/kWh) the greenest `hours` window
     picked from that forecast actually was than the truly greenest one (0 = picked the best).
     Every column is scored on the same windows, those where all `cols` and the actual are
     complete, so a patchier forecast isn't judged on an easier set. Issues with no such window
-    are dropped."""
+    are dropped. `full_horizon` also drops issues scored on fewer leads than the most complete
+    one (live issues whose later actuals aren't published yet), so groups compare like for like."""
     slots = max(1, round(hours * 2))
     rows = preds.dropna(subset=["y", *cols])
+    if full_horizon:
+        n = rows.groupby("issued_at")["lead"].transform("size")
+        rows = rows[n == n.max()]
 
     def window_means(c: str) -> pd.DataFrame:  # issue x window-end lead; NaN if incomplete
         wide = rows.pivot(index="issued_at", columns="lead", values=c)

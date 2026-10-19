@@ -79,12 +79,12 @@ def report(rows: pd.DataFrame) -> str:
                    "resampling 3-day blocks; below zero = we are better)")  # fmt: skip
         except ValueError as e:  # too few days for an honest interval
             gap = f"Our MAE minus NESO's: no interval yet ({e})"
-        regret = fc.window_regret(v, ["model", "neso"], hours=3)
+        regret = fc.window_regret(v, ["model", "neso"], hours=3, full_horizon=True)
         out += [
             f"== {version}: {v['issued_at'].nunique()} forecasts, {len(v)} scored half-hours, "
             f"targets {day.min()} to {day.max()}",
             gap,
-            f"Greenest 3 h window regret (issues with a complete window: {len(regret)}): "
+            f"Greenest 3 h window regret (fully scored issues only: {len(regret)}): "
             f"ours {regret['model'].mean():.1f}, NESO {regret['neso'].mean():.1f} gCO2/kWh",
             "",
             "By lead band:",

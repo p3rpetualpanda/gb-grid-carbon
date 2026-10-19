@@ -251,7 +251,7 @@ def test_paired_bootstrap_of_a_forecast_with_itself_is_zero():
 def test_paired_bootstrap_resamples_blocks_of_days_not_half_hours():
     # One day carries the whole gap: resampling blocks of days must give a wide interval that
     # reaches 0 (draws without that day); resampling half-hours would give hi near -12.
-    preds = scored_preds(days=30)
+    preds = scored_preds(days=45)
     preds["b"] = preds["a"]
     first_day = preds["issued_at"] == preds["issued_at"].min()
     preds.loc[first_day, "b"] = preds.loc[first_day, "y"] + 500
@@ -260,8 +260,9 @@ def test_paired_bootstrap_resamples_blocks_of_days_not_half_hours():
 
 
 def test_paired_bootstrap_refuses_too_few_days():
-    with pytest.raises(ValueError, match="need 20"):
-        fc.paired_bootstrap(scored_preds(days=10), "a", "a")
+    # 30 days = 10 blocks: too few for a percentile interval to be honest.
+    with pytest.raises(ValueError, match="need 45"):
+        fc.paired_bootstrap(scored_preds(days=30), "a", "a")
 
 
 def test_window_regret_is_zero_when_the_forecast_is_off_by_a_constant():
@@ -311,3 +312,13 @@ def test_window_regret_picks_the_same_window_as_the_dashboard():
     end = start + 5 * fc.STEP
     expected = one.loc[start:end, "y"].mean() - one["y"].rolling(6).mean().min()
     assert fc.window_regret(preds, ["a"], hours=3)["a"].iloc[0] == pytest.approx(expected)
+
+
+def test_window_regret_can_skip_partly_scored_issues():
+    # A recent issue scored on its first few hours only is judged on near-term windows; with
+    # full_horizon=True it is dropped, so versions with different shares of recent issues compare.
+    preds = scored_preds(days=30)
+    preds["b"] = preds["y"] + 5
+    preds.loc[(preds["issued_at"] == preds["issued_at"].max()) & (preds["lead"] > 10), "y"] = np.nan
+    assert len(fc.window_regret(preds, ["b"])) == 30
+    assert len(fc.window_regret(preds, ["b"], full_horizon=True)) == 29
