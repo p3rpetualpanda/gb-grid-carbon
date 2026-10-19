@@ -11,6 +11,12 @@ select
     avg(temperature_c) filter (
         where point_id in ('manchester', 'birmingham', 'london')
     ) as temperature_c,
-    avg(cloud_cover_pct) as cloud_cover_pct
+    -- The original 7 points only: wind-farm points added in Oct 2026 would shift this series.
+    avg(cloud_cover_pct) filter (
+        where point_id in (
+            'north_scotland', 'south_scotland', 'north_sea_offshore', 'manchester',
+            'birmingham', 'london', 'south_england_solar'
+        )
+    ) as cloud_cover_pct
 from {{ ref('stg_weather_observed') }}
 group by hour_utc

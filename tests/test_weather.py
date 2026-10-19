@@ -53,3 +53,31 @@ def test_a_missing_variable_fails_instead_of_loading_nulls(fixture_json):
     del payload[0]["hourly"]["wind_speed_100m"]  # e.g. Open-Meteo renames it
     with pytest.raises(ValueError, match="wind_speed_100m"):
         wx.parse_locations(payload, TWO_POINTS)
+
+
+def test_observed_and_snapshot_fetch_only_the_grid_points():
+    # Open-Meteo bills per location: the wind-farm points are only needed in the historical
+    # forecast (model training), so the hourly observed and snapshot fetches skip them.
+    import inspect
+
+    for fetch in (wx.fetch_weather_observed, wx.fetch_weather_forecast):
+        assert inspect.signature(fetch).parameters["points"].default == wx.GRID_POINTS
+    assert (
+        inspect.signature(wx.fetch_weather_historical_forecast).parameters["points"].default
+        == wx.WEATHER_POINTS
+    )
+    assert len(wx.GRID_POINTS) == 7
+
+
+def test_dbt_weather_point_ids_match_weather_py():
+    # int_weather_gb.sql keeps its own id lists; a rename in weather.py must fail here, not drift.
+    import re
+    from pathlib import Path
+
+    sql = (
+        Path(__file__).parents[1] / "dbt" / "models" / "intermediate" / "int_weather_gb.sql"
+    ).read_text()
+    ids = set(re.findall(r"'(\w+)'", sql[: sql.index("{{")]))  # skip ref('...')
+    assert ids <= {p.point_id for p in wx.WEATHER_POINTS}
+    cloud = sql[sql.index("as temperature_c") : sql.index("as cloud_cover_pct")]
+    assert set(re.findall(r"'(\w+)'", cloud)) == {p.point_id for p in wx.GRID_POINTS}
