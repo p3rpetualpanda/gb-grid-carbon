@@ -5,5 +5,6 @@
   "model_mae": 20.9,
   "best_baseline_mae": 44.3,
   "improvement": 0.528,
-  "neso_mae": 9.9
+  "neso_mae": 9.9,
+  "previous_model_mae": 27.0
 }

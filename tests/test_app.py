@@ -103,12 +103,22 @@ def test_slot_label():
 
 
 def test_upcoming_drops_half_hours_already_past():
-    issue = pd.DataFrame({"period_from": pd.date_range(IDX[0], periods=40, freq="30min")})
+    forecast = pd.Series(1.0, index=pd.date_range(IDX[0], periods=40, freq="30min"))
     now = IDX[0] + pd.Timedelta(minutes=95)  # inside the 4th half-hour
-    out = app.upcoming(issue, now, min_rows=16)
-    assert out["period_from"].iloc[0] == IDX[3] and len(out) == 37
-    # Too little forecast left to plan with: keep the whole (stale) issue rather than crash.
-    assert len(app.upcoming(issue, now + pd.Timedelta(hours=15), min_rows=16)) == 40
+    out, ahead = app.upcoming(forecast, now, min_hours=8)
+    assert out.index[0] == IDX[3] and len(out) == 37 and ahead == 18.5
+    # Too little forecast left to plan with: keep the whole (stale) issue rather than crash,
+    # but still report how little of it is ahead.
+    out, ahead = app.upcoming(forecast, now + pd.Timedelta(hours=15), min_hours=8)
+    assert len(out) == 40 and ahead == 3.5
+
+
+def test_band_sql_matches_the_python_bands():
+    import duckdb
+
+    leads = pd.DataFrame({"lead": [1, 12, 13, 24, 25, 48, 49, 96]})
+    sql = duckdb.sql(f"select {app.BAND_SQL} as band from leads").df()["band"]
+    assert sql.tolist() == app._bands(leads).tolist()
 
 
 def test_typical_day_weights_weekdays_and_weekends_by_count():

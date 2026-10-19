@@ -63,12 +63,18 @@ def typical_day(typical: pd.DataFrame) -> pd.DataFrame:
     return (sums["gn"] / sums["n"]).unstack().reindex(columns=range(48)).dropna()
 
 
-def upcoming(issue: pd.DataFrame, now: pd.Timestamp, min_rows: int = 16) -> pd.DataFrame:
-    """The issue's half-hours from the current one on: the latest issue can be hours old, and a
-    window that already started is no advice. If under `min_rows` remain (the pipeline is far
-    behind), the whole issue is kept so the page still renders; the caller flags it."""
-    left = issue[issue["period_from"] >= now.floor("30min")].reset_index(drop=True)
-    return left if len(left) >= min_rows else issue
+MAX_TASK_H = 8  # the planner's longest task
+
+
+def upcoming(
+    forecast: pd.Series, now: pd.Timestamp, min_hours: float = MAX_TASK_H
+) -> tuple[pd.Series, float]:
+    """The forecast from the current half-hour on, and how many hours that is: the latest issue
+    can be hours old, and a window that already started is no advice. If under `min_hours`
+    remain (the pipeline is far behind), the whole forecast comes back so the page still renders,
+    with the hours that are still ahead."""
+    left = forecast[forecast.index >= now.floor("30min")]
+    return (left if len(left) >= 2 * min_hours else forecast), len(left) / 2
 
 
 def slot_label(slot: int) -> str:
@@ -103,9 +109,21 @@ def best_forecast(issue: pd.DataFrame) -> pd.Series:
 MIN_SCORED = 100  # scored half-hours a model version needs in a band before its own MAE is used
 
 
+BAND_EDGES = [0, 12, 24, 48, 96]  # lead in half-hours
+BAND_LABELS = ["0-6 h", "6-12 h", "12-24 h", "24-48 h"]
+# The same bands in SQL, for the accuracy queries.
+BAND_SQL = (
+    "case "
+    + " ".join(
+        f"when lead <= {hi} then '{band}'"
+        for hi, band in zip(BAND_EDGES[1:], BAND_LABELS, strict=True)
+    )
+    + " end"
+)
+
+
 def _bands(issue: pd.DataFrame) -> pd.Series:
-    return pd.cut(issue["lead"], [0, 12, 24, 48, 96],
-                  labels=["0-6 h", "6-12 h", "12-24 h", "24-48 h"]).astype(str)  # fmt: skip
+    return pd.cut(issue["lead"], BAND_EDGES, labels=BAND_LABELS).astype(str)
 
 
 def typical_error(
@@ -175,22 +193,19 @@ def main() -> None:
         f"Data refreshes every few hours (last: {hhmm(refreshed)} UK time). [Source code]({REPO})"
     )
 
-    now = pd.Timestamp.now("UTC")
-    latest_issue = upcoming(
-        q("""
+    latest_issue = q("""
         select period_from, lead, model_gco2_kwh, neso_gco2_kwh from marts.fct_model_vs_official
         where issued_at = (select max(issued_at) from marts.fct_model_vs_official)
         order by period_from
-    """),
-        now,
-        min_rows=16,  # 8 h, the planner's longest task
-    )
-    first = latest_issue.period_from.min()
-    if first < now.floor("30min"):
-        st.warning(f"The pipeline is behind: the latest forecast starts {hhmm(first)}, "
-                   "so some times below have passed.")  # fmt: skip
-    forecast = best_forecast(latest_issue)
-    scored = q("""
+    """)
+    forecast = best_forecast(latest_issue)  # the whole issue, for the chart
+    advice, ahead = upcoming(forecast, pd.Timestamp.now("UTC"))  # windows from now on
+    span = f"next {ahead:.0f} h" if ahead >= MAX_TASK_H else "latest forecast"
+    if ahead < 36:  # the issue is over 12 h old
+        passed = ", so some times below have passed" if ahead < MAX_TASK_H else ""
+        st.warning(f"The pipeline is behind: the latest forecast was made "
+                   f"{hhmm(forecast.index.min())} and has {ahead:g} h left{passed}.")  # fmt: skip
+    scored = q(f"""
         select coalesce(band, 'All') as band,
                count(distinct issued_at) as issues, count(*) as n,
                min(period_from) as first_target, max(period_from) as last_target,
@@ -201,8 +216,7 @@ def main() -> None:
                avg(neso_gco2_kwh - actual_gco2_kwh) as neso_bias,
                avg((model_abs_error < neso_abs_error)::int) * 100 as we_closer
         from (
-            select *, case when lead <= 12 then '0-6 h' when lead <= 24 then '6-12 h'
-                           when lead <= 48 then '12-24 h' else '24-48 h' end as band
+            select *, {BAND_SQL} as band
             from marts.fct_model_vs_official
             where actual_gco2_kwh is not null and neso_abs_error is not null
         )
@@ -210,12 +224,10 @@ def main() -> None:
         order by grouping(band), min(lead)
     """)
     # MAE of the model version that issued the forecast shown.
-    current = q("""
+    current = q(f"""
         select band, count(*) as n, avg(model_abs_error) as our_mae
         from (
-            select model_abs_error,
-                   case when lead <= 12 then '0-6 h' when lead <= 24 then '6-12 h'
-                        when lead <= 48 then '12-24 h' else '24-48 h' end as band
+            select model_abs_error, {BAND_SQL} as band
             from marts.fct_model_vs_official
             where actual_gco2_kwh is not null and neso_abs_error is not null
               and model_version = (  -- the version of the issue the chart shows
@@ -244,14 +256,14 @@ def main() -> None:
             select period_from, actual_gco2_kwh, intensity_index from marts.fct_grid_halfhourly
             where actual_gco2_kwh is not null order by period_from desc limit 1
         """).iloc[0]
-        start, mean = greenest_window(forecast, 3)
+        start, mean = greenest_window(advice, 3)
         c1, c2, c3 = st.columns(3)
         # Index goes in the label: metric's delta slot always draws an up/down arrow.
         c1.metric(
             f"Latest actual ({hhmm(latest.period_from)}) · {latest.intensity_index}",
             f"{latest.actual_gco2_kwh} gCO₂/kWh",
         )
-        c2.metric("Cleanest 3 h in the next 48 h starts", hhmm(start))
+        c2.metric(f"Cleanest 3 h in the {span} starts", hhmm(start))
         c3.metric("Forecast intensity in that window", f"{mean:.0f} gCO₂/kWh")
         past = q("""
             select period_from, actual_gco2_kwh from marts.fct_grid_halfhourly
@@ -362,11 +374,11 @@ def main() -> None:
 
     with planner_tab:
         st.subheader("When should I run it?")
-        hours = st.slider("How long does it run? (hours)", 0.5, 8.0, 3.0, 0.5)
-        start, mean = greenest_window(forecast, hours)
-        now_mean = forecast.iloc[: max(1, round(hours * 2))].mean()
+        hours = st.slider("How long does it run? (hours)", 0.5, float(MAX_TASK_H), 3.0, 0.5)
+        start, mean = greenest_window(advice, hours)
+        now_mean = advice.iloc[: max(1, round(hours * 2))].mean()
         st.success(
-            f"Start at **{hhmm(start)}** for the cleanest {hours:g} h in the next 48 h: "
+            f"Start at **{hhmm(start)}** for the cleanest {hours:g} h in the {span}: "
             f"about **{mean:.0f} gCO₂/kWh**, vs {now_mean:.0f} if you start now "
             f"(**{1 - mean / now_mean:.0%} less CO₂**)."
         )

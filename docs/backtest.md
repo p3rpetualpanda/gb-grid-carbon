@@ -16,7 +16,7 @@ Open-Meteo's *historical forecast*, never observed weather. These rules are enfo
 **44.3** for the best naïve baseline (**53%
 better**) and **9.9** for NESO's published forecast. The model uses NESO's own
 embedded wind/solar forecasts as inputs (the vintage issued before each forecast, never a later
-one); without them (the previous model) it scores **26.8**. Also adding
+one); without them (the previous model) it scores **27.0**. Also adding
 NESO's transmission wind forecast gives **20.9**, but its archive only
 covers the day each forecast is published, so most 48 h targets lack it and it is left out.
 
@@ -24,11 +24,11 @@ covers the day each forecast is published, so most 48 h targets lack it and it i
 
 |  | Our model (LightGBM + NESO embedded wind/solar) | Previous model (no NESO inputs) | + NESO transmission wind | NESO published forecast* | Last known actual | Same slot, last known day | Same slot, last week |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 0-6h | 17.7 | 20.7 | 17.9 | 9.9 | 28.9 | 40.1 | 54.3 |
-| 6-12h | 19.6 | 26.1 | 19.8 | 9.9 | 44.2 | 40.1 | 54.4 |
-| 12-24h | 20.6 | 27 | 20.6 | 9.9 | 45.3 | 40.8 | 54.4 |
-| 24-48h | 22.2 | 28.3 | 22.1 | 9.9 | 53.9 | 48.1 | 54.4 |
-| all | 20.9 | 26.8 | 20.9 | 9.9 | 47.4 | 44.3 | 54.4 |
+| 0-6h | 17.6 | 20.8 | 17.9 | 9.9 | 28.9 | 40.1 | 54.3 |
+| 6-12h | 19.6 | 26.3 | 19.9 | 9.9 | 44.2 | 40.1 | 54.4 |
+| 12-24h | 20.5 | 27.3 | 20.6 | 9.9 | 45.3 | 40.8 | 54.4 |
+| 24-48h | 22.2 | 28.5 | 22.1 | 9.9 | 53.9 | 48.1 | 54.4 |
+| all | 20.9 | 27 | 20.9 | 9.9 | 47.4 | 44.3 | 54.4 |
 
 \* **Read the NESO column with care.** The API only keeps NESO's *final* published forecast for
 each half-hour, not when it was made, so it is likely a short-lead forecast. That makes it a
@@ -43,27 +43,27 @@ at long leads to be somewhat higher than this backtest.
 
 |  | Our model (LightGBM + NESO embedded wind/solar) | Previous model (no NESO inputs) | + NESO transmission wind | NESO published forecast* | Last known actual | Same slot, last known day | Same slot, last week |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 0-6h | 0.4 | 2.8 | 0.3 | 0.1 | 0.2 | 0.2 | 0.7 |
-| 6-12h | 1 | 5.9 | 0.6 | 0.2 | 0.1 | 0.1 | 0.7 |
-| 12-24h | 1.2 | 7.2 | 1 | 0.2 | 0.2 | 0 | 0.7 |
-| 24-48h | 1.8 | 7.8 | 2.2 | 0.1 | 0.1 | -0 | 0.6 |
-| all | 1.4 | 6.8 | 1.5 | 0.1 | 0.1 | 0 | 0.6 |
+| 0-6h | 0.4 | 2.9 | 0.3 | 0.1 | 0.2 | 0.2 | 0.7 |
+| 6-12h | 0.8 | 6 | 0.6 | 0.2 | 0.1 | 0.1 | 0.7 |
+| 12-24h | 1.1 | 7.4 | 1.1 | 0.2 | 0.2 | 0 | 0.7 |
+| 24-48h | 1.6 | 7.9 | 2.1 | 0.1 | 0.1 | -0 | 0.6 |
+| all | 1.3 | 6.9 | 1.4 | 0.1 | 0.1 | 0 | 0.6 |
 
 |  | Our model (LightGBM + NESO embedded wind/solar) | Previous model (no NESO inputs) | NESO published forecast* |
 | --- | --- | --- | --- |
-| 2025-10 | 7.4 | 10 | 0.6 |
-| 2025-11 | 7.5 | 12.7 | 3.4 |
-| 2025-12 | 3.5 | 12.3 | 3 |
-| 2026-01 | 0.3 | 13.7 | 1.8 |
-| 2026-02 | -0.6 | 7.2 | 2 |
-| 2026-03 | 2.2 | 2.4 | 0.5 |
-| 2026-04 | 7.7 | 13.2 | -0.7 |
+| 2025-10 | 6.8 | 11.1 | 0.6 |
+| 2025-11 | 7.1 | 12.7 | 3.4 |
+| 2025-12 | 3.2 | 12.7 | 3 |
+| 2026-01 | -0 | 13.5 | 1.8 |
+| 2026-02 | -0.3 | 7 | 2 |
+| 2026-03 | 2 | 2.2 | 0.5 |
+| 2026-04 | 7.3 | 13 | -0.7 |
 | 2026-05 | -9.2 | -3.9 | -0.8 |
-| 2026-06 | -14.8 | -4.7 | -0.4 |
-| 2026-07 | 3 | 7.1 | -0.9 |
-| 2026-08 | 9.5 | 9.2 | -1.3 |
-| 2026-09 | 0.7 | 2.5 | -5.5 |
-| 2026-10 | -18.6 | -3.8 | 1 |
+| 2026-06 | -14.9 | -4.6 | -0.4 |
+| 2026-07 | 2.8 | 7.4 | -0.9 |
+| 2026-08 | 9.8 | 9.4 | -1.3 |
+| 2026-09 | 1 | 3 | -5.5 |
+| 2026-10 | -19.3 | -3.9 | 1 |
 
 **Greenest 3 h window.** For each forecast, pick the cleanest 3 h block it predicts and compare
 the actual intensity in that block with the truly cleanest block. Regret is the gap in gCO₂/kWh
@@ -71,9 +71,9 @@ the actual intensity in that block with the truly cleanest block. Regret is the 
 
 |  | mean regret | share within 5 of best |
 | --- | --- | --- |
-| Our model (LightGBM + NESO embedded wind/solar) | 6.63 | 0.676 |
-| Previous model (no NESO inputs) | 9.46 | 0.565 |
-| + NESO transmission wind | 6.83 | 0.671 |
+| Our model (LightGBM + NESO embedded wind/solar) | 6.7 | 0.662 |
+| Previous model (no NESO inputs) | 9.57 | 0.558 |
+| + NESO transmission wind | 6.74 | 0.672 |
 | NESO published forecast* | 2.99 | 0.83 |
 | Last known actual | 57.5 | 0.128 |
 | Same slot, last known day | 30.4 | 0.295 |
@@ -86,24 +86,24 @@ only if the whole interval is below zero.
 
 |  | MAE minus live model | 95% low | 95% high |
 | --- | --- | --- | --- |
-| Previous model (no NESO inputs) | 5.83 | 4.64 | 7.02 |
-| + NESO transmission wind | -0.01 | -0.25 | 0.21 |
+| Previous model (no NESO inputs) | 6.07 | 4.83 | 7.26 |
+| + NESO transmission wind | 0.05 | -0.16 | 0.23 |
 
 **What drives the model** (share of total gain):
 
 |  | gain_share |
 | --- | --- |
 | neso_embedded_wind_mw | 0.414 |
-| lag_day | 0.137 |
-| last_actual | 0.08 |
+| lag_day | 0.135 |
+| last_actual | 0.082 |
 | halfhour_slot | 0.061 |
 | lag_week | 0.054 |
-| neso_embedded_solar_mw | 0.053 |
+| neso_embedded_solar_mw | 0.052 |
 | month | 0.047 |
-| wind_speed | 0.044 |
+| wind_speed | 0.043 |
 | iso_weekday | 0.042 |
 | temperature | 0.037 |
 | mean_24h | 0.02 |
-| is_holiday | 0.004 |
+| is_holiday | 0.005 |
 | lead | 0.004 |
 | solar_radiation | 0.003 |

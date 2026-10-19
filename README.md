@@ -56,7 +56,7 @@ forecast-not-observed weather, train-before-test) are enforced by tests. Details
 [`docs/backtest.md`](docs/backtest.md).
 
 **NESO forecasts as inputs.** NESO's embedded wind/solar forecasts (always the vintage published
-before each forecast) cut the backtest MAE from 26.8 to the figure above, better at every lead
+before each forecast) cut the backtest MAE from <!-- bt:previous_model_mae -->27.0<!-- /bt --> to the figure above, better at every lead
 time. NESO's transmission wind forecast is left out: its archive only covers the day each forecast
 is published, so most 48 h targets lack it. If NESO's feed stalls, the pipeline falls back to the
 model without NESO inputs and labels those forecasts `lgbm-direct-v3-fallback`.
@@ -113,7 +113,7 @@ Found by running against the real APIs, not by unit tests (full write-up in
 | 7 | Analysis & findings → [`docs/findings.md`](docs/findings.md) | ✅ Done |
 | 8 | 48h forecast, backtest, live scoring vs NESO → [`docs/backtest.md`](docs/backtest.md) | ✅ Live |
 | 9 | Streamlit dashboard (`app/streamlit_app.py`) → [live](https://gb-grid-carbon-b8k4zy3yzvfzqzxewxzdsk.streamlit.app/) | ✅ Live |
-| 10 | NESO embedded wind/solar forecasts as live model inputs (backtest MAE 26.8 → 20.9) | ✅ Live |
+| 10 | NESO embedded wind/solar forecasts as live model inputs (backtest MAE <!-- bt:previous_model_mae -->27.0<!-- /bt --> → <!-- bt:model_mae -->20.9<!-- /bt -->) | ✅ Live |
 
 Full plan: [`docs/project_plan.md`](docs/project_plan.md). Decisions and surprises:
 [`docs/dev_log.md`](docs/dev_log.md). CV bullets and interview notes:
