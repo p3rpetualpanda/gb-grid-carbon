@@ -15,10 +15,9 @@ dist/
 # Secrets
 .env
 
-# Local warehouse + logs (rebuilt by `gridcarbon backfill`)
-data/*.duckdb
-data/*.duckdb.wal
-data/*.log
+# Local warehouse, logs and saved run outputs (rebuilt by `gridcarbon backfill`)
+data/*
+!data/.gitkeep
 
 # dbt (Phase 5)
 dbt/target/
