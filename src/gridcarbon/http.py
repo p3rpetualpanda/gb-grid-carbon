@@ -71,4 +71,8 @@ class ApiClient:
             raise RetryableHTTPError(f"HTTP {resp.status_code} for {resp.url}")
         if not resp.ok:
             raise ApiError(f"HTTP {resp.status_code} for {resp.url}: {resp.text[:300]}")
-        return resp.json()
+        try:
+            return resp.json()
+        except requests.JSONDecodeError as e:  # a blip (empty or HTML body) behind a 200
+            raise RetryableHTTPError(f"HTTP {resp.status_code} but not JSON for {resp.url}: "
+                                     f"{resp.text[:100]!r}") from e  # fmt: skip
