@@ -234,3 +234,14 @@ def test_fetch_wind_14d_fails_if_the_layout_changes(client):
     responses.add(responses.GET, f"{neso.API_URL}/package_show", json=package())
     with pytest.raises(ValueError, match="14-day"):
         neso.fetch_wind_14d_forecast(client)
+
+
+@responses.activate
+def test_fetch_embedded_fails_when_a_year_has_no_archive(client):
+    # Early January, before NESO publishes the new year's archive: loading only December's
+    # vintages would leave a silent gap.
+    responses.add(responses.GET, f"{neso.API_URL}/package_show", json=EMBEDDED_PACKAGE)
+    add_fields()
+    responses.add(responses.GET, f"{neso.API_URL}/datastore_search_sql", json=sql_response([]))
+    with pytest.raises(ValueError, match="2025"):
+        neso.fetch_embedded_forecast(client, utc(2024, 12, 30), utc(2025, 1, 2))

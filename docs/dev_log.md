@@ -207,3 +207,23 @@ ours) against actuals later.
 - **Backtest re-run** for the bounded last actual: the headline is unchanged (20.9 vs 44.3 for
   the best baseline); the no-NESO model moved 26.8 → 27.0. That figure was typed into the README
   by hand, so it now comes from `backtest_results.json` (`previous_model_mae`) like the others.
+
+## 2026-10-19: Whole-repo review fixes
+
+- **A NESO outage no longer stops the pipeline.** The forecast had a fallback for a stalled NESO
+  feed, but it could never run: a NESO fetch error failed `gridcarbon incremental`, and a day-old
+  NESO table failed `dbt source freshness`, so dbt and `predict` were skipped and the whole
+  dashboard went stale. NESO datasets are now `optional`: a failure is logged, written to
+  `meta.pipeline_runs.error` on a successful run, and printed; their freshness checks only warn.
+- **Empty backfill windows are retried.** A window that came back empty was logged as loaded, so
+  `backfill --resume` skipped it forever. Only windows with rows are logged now.
+- **Missing NESO yearly archive fails loudly.** Early in January, before NESO publishes the new
+  year's embedded archive, a window spanning the new year loaded only December and said nothing.
+- **Dashboard without a forecast.** An empty `fct_model_vs_official` crashed the whole page; the
+  Now and Planner tabs now say there is no forecast yet and the other tabs render. The accuracy
+  example now really is the latest fully scored forecast (it used to pick the issue with the
+  most actuals, which could be partly scored). The dashboard reads `MOTHERDUCK_DATABASE` like the
+  pipeline instead of a hard-coded name.
+- The backtest report said forecasts were issued every 6 h; it is 6.5 h (`ISSUE_EVERY`), and the
+  text now comes from that constant. Generation-mix totals treat a missing fuel as 0% instead of
+  going NULL (dbt unit test).

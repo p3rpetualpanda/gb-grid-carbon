@@ -29,6 +29,9 @@ class Dataset:
     earliest: datetime
     chunk_days: int
     fetch: Callable[[ApiClient, datetime, datetime], pd.DataFrame]
+    # Model inputs with a fallback (NESO): a failure is recorded, not fatal, so the run still
+    # rebuilds the marts and publishes a forecast.
+    optional: bool = False
 
 
 DATASETS: dict[str, Dataset] = {
@@ -59,12 +62,12 @@ DATASETS: dict[str, Dataset] = {
         Dataset(
             "neso_wind_forecast", "raw.neso_wind_forecast", "issued_at",
             ("issued_at", "period_from"), neso.EARLIEST, neso.WIND_MAX_DAYS,
-            neso.fetch_wind_forecast,
+            neso.fetch_wind_forecast, optional=True,
         ),
         Dataset(
             "neso_embedded_forecast", "raw.neso_embedded_forecast", "issued_at",
             ("issued_at", "period_from"), neso.EARLIEST, neso.EMBEDDED_MAX_DAYS,
-            neso.fetch_embedded_forecast,
+            neso.fetch_embedded_forecast, optional=True,
         ),
     )
 }  # fmt: skip
@@ -104,8 +107,10 @@ def load_range(
         if (a, b) in done:
             log.debug("%s: skip %s..%s (already loaded)", ds.name, a, b)
             continue
-        n = upsert(con, ds.table, ds.fetch(client, a, b), ds.key_cols, run["run_id"])
-        log_window(con, run["run_id"], ds.name, a, b, n)
+        df = ds.fetch(client, a, b)
+        n = upsert(con, ds.table, df, ds.key_cols, run["run_id"])
+        if not df.empty:  # an empty response may be an upstream blip: let resume retry it
+            log_window(con, run["run_id"], ds.name, a, b, n)
         log.info("%s: %s..%s -> %d rows", ds.name, a.date(), b.date(), n)
         total += n
         run["rows_loaded"] += n
@@ -125,6 +130,30 @@ def incremental_window(
     anchor = latest if latest is not None else now
     start = max(ds.earliest, floor_half_hour(anchor - timedelta(days=lookback_days)))
     return start, floor_half_hour(now) + HALF_HOUR
+
+
+def _skip(run: dict, name: str, exc: Exception) -> None:
+    log.exception("%s: failed, skipped this run", name)
+    run.setdefault("warnings", []).append(f"{name}: {type(exc).__name__}: {exc}"[:500])
+
+
+def load_incremental(
+    con: duckdb.DuckDBPyConnection,
+    client: ApiClient,
+    ds: Dataset,
+    now: datetime,
+    lookback_days: int,
+    run: dict,
+) -> int:
+    """Bring one dataset up to date. An optional dataset's failure goes in run["warnings"]."""
+    start, end = incremental_window(con, ds, now, lookback_days)
+    try:
+        return load_range(con, client, ds, start, end, run)
+    except Exception as exc:
+        if not ds.optional:
+            raise
+        _skip(run, ds.name, exc)
+        return 0
 
 
 def snapshot_forecasts(
@@ -147,14 +176,16 @@ def snapshot_forecasts(
         ("issued_at", "time", "point_id"),
         run["run_id"],
     )
-    # Last: a NESO portal failure still fails the run, but after the other snapshots are saved.
-    n += upsert(
-        con,
-        "raw.neso_wind_14d_snapshots",
-        neso.fetch_wind_14d_forecast(client),
-        ("issued_at", "period_from"),
-        run["run_id"],
-    )
+    try:  # NESO is optional (see Dataset.optional): a portal failure must not stop the forecast
+        n += upsert(
+            con,
+            "raw.neso_wind_14d_snapshots",
+            neso.fetch_wind_14d_forecast(client),
+            ("issued_at", "period_from"),
+            run["run_id"],
+        )
+    except Exception as exc:
+        _skip(run, "neso_wind_14d_snapshots", exc)
     log.info("snapshots: %d rows", n)
     run["rows_loaded"] += n
     return n

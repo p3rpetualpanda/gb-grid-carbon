@@ -95,12 +95,21 @@ def _wind_resources(client: ApiClient) -> list[str]:
 def _embedded_resources(client: ApiClient, start: datetime, end: datetime) -> list[str]:
     """Yearly archives overlapping [start, end), plus any undated file that has vintages."""
     years = set(range(start.year, (end - timedelta(seconds=1)).year + 1))
-    ids = []
+    ids, undated, covered = [], [], set()
     for r in _resources(client, EMBEDDED_PACKAGE):
         named = {int(y) for y in re.findall(r"\b(20\d\d)\b", r["name"])}
-        if not named or named & years:
-            ids.append(r["id"])
-    return _with_vintages(client, ids, "Forecast_Datetime")
+        if not named:
+            undated.append(r["id"])
+        elif named & years:
+            covered |= named
+        else:
+            continue
+        ids.append(r["id"])
+    kept = _with_vintages(client, ids, "Forecast_Datetime")
+    # A new year's archive can lag its first forecasts: fail rather than leave a silent gap.
+    if years - covered and not set(kept) & set(undated):
+        raise ValueError(f"no NESO embedded archive for {sorted(years - covered)}")
+    return kept
 
 
 def _sql_rows(

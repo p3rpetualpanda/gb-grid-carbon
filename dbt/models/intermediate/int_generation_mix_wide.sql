@@ -14,9 +14,12 @@ with wide as (
     group by period_from
 )
 
+-- A fuel missing from a period counts as 0% in the totals (else one gap NULLs the whole total).
 select
     *,
-    wind_pct + solar_pct + hydro_pct as renewable_pct,  -- biomass and imports deliberately excluded
-    wind_pct + solar_pct + hydro_pct + nuclear_pct as low_carbon_pct,
-    gas_pct + coal_pct as fossil_pct
+    coalesce(wind_pct, 0) + coalesce(solar_pct, 0) + coalesce(hydro_pct, 0)
+        as renewable_pct,  -- biomass and imports deliberately excluded
+    coalesce(wind_pct, 0) + coalesce(solar_pct, 0) + coalesce(hydro_pct, 0)
+        + coalesce(nuclear_pct, 0) as low_carbon_pct,
+    coalesce(gas_pct, 0) + coalesce(coal_pct, 0) as fossil_pct
 from wide

@@ -77,6 +77,29 @@ def upcoming(
     return (left if len(left) >= 2 * min_hours else forecast), len(left) / 2
 
 
+def hhmm(ts: pd.Timestamp) -> str:
+    """Weekday and UK time, or a dash when there is no timestamp (an empty warehouse)."""
+    return "–" if pd.isna(ts) else ts.tz_convert(TZ).strftime("%a %H:%M")
+
+
+def motherduck_url() -> str:
+    """Same database as the pipeline (Settings.motherduck_database)."""
+    return f"md:{os.environ.get('MOTHERDUCK_DATABASE', 'gridcarbon')}"
+
+
+# The latest issue whose every half-hour has an actual: a fully played-out example.
+EXAMPLE_SQL = """
+    select issued_at, period_from, model_gco2_kwh, neso_gco2_kwh, actual_gco2_kwh
+    from marts.fct_model_vs_official
+    where issued_at = (
+        select issued_at from marts.fct_model_vs_official
+        group by issued_at having count(actual_gco2_kwh) = count(*)
+        order by issued_at desc limit 1
+    )
+    order by period_from
+"""
+
+
 def slot_label(slot: int) -> str:
     return f"{slot // 2 % 24:02d}:{slot % 2 * 30:02d}"
 
@@ -165,7 +188,7 @@ def main() -> None:
         except Exception:  # no secrets file locally
             token = os.environ.get("MOTHERDUCK_TOKEN")
         if token:
-            con = duckdb.connect("md:gridcarbon", config={"motherduck_token": token})
+            con = duckdb.connect(motherduck_url(), config={"motherduck_token": token})
         elif LOCAL_DB.exists():
             con = duckdb.connect(str(LOCAL_DB), read_only=True)
         else:
@@ -180,9 +203,6 @@ def main() -> None:
 
     def uk(ts) -> pd.Series | pd.Timestamp:
         return ts.dt.tz_convert(TZ) if isinstance(ts, pd.Series) else ts.tz_convert(TZ)
-
-    def hhmm(ts: pd.Timestamp) -> str:
-        return uk(ts).strftime("%a %H:%M")
 
     st.title("GB Grid Carbon Tracker")
     refreshed = q(
@@ -201,7 +221,7 @@ def main() -> None:
     forecast = best_forecast(latest_issue)  # the whole issue, for the chart
     advice, ahead = upcoming(forecast, pd.Timestamp.now("UTC"))  # windows from now on
     span = f"next {ahead:.0f} h" if ahead >= MAX_TASK_H else "latest forecast"
-    if ahead < 36:  # the issue is over 12 h old
+    if not forecast.empty and ahead < 36:  # the issue is over 12 h old
         passed = ", so some times below have passed" if ahead < MAX_TASK_H else ""
         st.warning(f"The pipeline is behind: the latest forecast was made "
                    f"{hhmm(forecast.index.min())} and has {ahead:g} h left{passed}.")  # fmt: skip
@@ -256,84 +276,88 @@ def main() -> None:
             select period_from, actual_gco2_kwh, intensity_index from marts.fct_grid_halfhourly
             where actual_gco2_kwh is not null order by period_from desc limit 1
         """).iloc[0]
-        start, mean = greenest_window(advice, 3)
         c1, c2, c3 = st.columns(3)
         # Index goes in the label: metric's delta slot always draws an up/down arrow.
         c1.metric(
             f"Latest actual ({hhmm(latest.period_from)}) · {latest.intensity_index}",
             f"{latest.actual_gco2_kwh} gCO₂/kWh",
         )
-        c2.metric(f"Cleanest 3 h in the {span} starts", hhmm(start))
-        c3.metric("Forecast intensity in that window", f"{mean:.0f} gCO₂/kWh")
-        past = q("""
-            select period_from, actual_gco2_kwh from marts.fct_grid_halfhourly
-            where period_from > (select max(period_from) from marts.fct_grid_halfhourly)
-                                - interval 36 hour
-            order by period_from
-        """)
-        fig = go.Figure()
-        if err.notna().any():
-            # Band first so the lines draw on top; tonexty fills between lower and upper.
-            fig.add_scatter(x=uk(forecast.index), y=(forecast - err).clip(lower=0),
-                            line=dict(width=0), hoverinfo="skip", showlegend=False)  # fmt: skip
-            fig.add_scatter(x=uk(forecast.index), y=forecast + err, line=dict(width=0),
-                            fill="tonexty", fillcolor="rgba(235, 104, 52, 0.15)",
-                            hoverinfo="skip", name="± typical error (live MAE)")  # fmt: skip
-        fig.add_scatter(x=uk(past.period_from), y=past.actual_gco2_kwh, name="Actual",
-                        line=dict(color=BLUE, width=2))  # fmt: skip
-        fig.add_scatter(x=uk(forecast.index), y=forecast, name="Our forecast (NESO's for 0-6 h)",
-                        line=dict(color=ORANGE, width=2))  # fmt: skip
-        fig.add_scatter(
-            x=uk(latest_issue.period_from),
-            y=latest_issue.neso_gco2_kwh,
-            name="NESO forecast",
-            line=dict(color=AQUA, width=2, dash="dot"),
-        )
-        fig.update_layout(
-            title="Carbon intensity: last 36 h and next 48 h (UK time)",
-            yaxis_title="gCO₂/kWh",
-            hovermode="x unified",
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-        )
-        st.plotly_chart(fig, width="stretch")
-        if err.notna().any():
-            mixed = ""
-            if mixes_versions(latest_issue, current):
-                mixed = (" Where this model version has under 100 scored half-hours at a lead "
-                         "time, earlier versions' errors are included.")  # fmt: skip
-            st.caption("Shaded band: the forecast ± its average live error at that lead time "
-                       f"(Forecast accuracy tab).{mixed}")  # fmt: skip
-
-        outlook = rows_or_empty(
-            q,
-            f"""
-            select period_from, wind_mw, embedded_wind_mw, embedded_solar_mw
-            from marts.fct_wind_solar_outlook
-            where period_from between '{forecast.index.min()}' and '{forecast.index.max()}'
-            order by period_from
-        """,
-        )
-        st.subheader("Wind and solar outlook (NESO forecast)")
-        if outlook.empty:
-            st.info("No NESO wind or solar forecast loaded for the next 48 h yet.")
+        if forecast.empty:  # st.stop() here would also blank every later tab
+            c2.info("No forecast yet: it appears after the next pipeline run.")
         else:
+            start, mean = greenest_window(advice, 3)
+            c2.metric(f"Cleanest 3 h in the {span} starts", hhmm(start))
+            c3.metric("Forecast intensity in that window", f"{mean:.0f} gCO₂/kWh")
+            past = q("""
+                select period_from, actual_gco2_kwh from marts.fct_grid_halfhourly
+                where period_from > (select max(period_from) from marts.fct_grid_halfhourly)
+                                    - interval 36 hour
+                order by period_from
+            """)
             fig = go.Figure()
-            for col, name, dash, colour in (
-                ("wind_mw", "Wind farms (transmission)", "solid", BLUE),
-                ("embedded_wind_mw", "Wind on local networks", "dot", BLUE),
-                ("embedded_solar_mw", "Solar", "solid", YELLOW),
-            ):
-                fig.add_scatter(x=uk(outlook.period_from), y=outlook[col] / 1000, name=name,
-                                line=dict(color=colour, width=2, dash=dash))  # fmt: skip
+            if err.notna().any():
+                # Band first so the lines draw on top; tonexty fills between lower and upper.
+                fig.add_scatter(x=uk(forecast.index), y=(forecast - err).clip(lower=0),
+                                line=dict(width=0), hoverinfo="skip", showlegend=False)  # fmt: skip
+                fig.add_scatter(x=uk(forecast.index), y=forecast + err, line=dict(width=0),
+                                fill="tonexty", fillcolor="rgba(235, 104, 52, 0.15)",
+                                hoverinfo="skip", name="± typical error (live MAE)")  # fmt: skip
+            fig.add_scatter(x=uk(past.period_from), y=past.actual_gco2_kwh, name="Actual",
+                            line=dict(color=BLUE, width=2))  # fmt: skip
+            fig.add_scatter(x=uk(forecast.index), y=forecast,
+                            name="Our forecast (NESO's for 0-6 h)",
+                            line=dict(color=ORANGE, width=2))  # fmt: skip
+            fig.add_scatter(
+                x=uk(latest_issue.period_from),
+                y=latest_issue.neso_gco2_kwh,
+                name="NESO forecast",
+                line=dict(color=AQUA, width=2, dash="dot"),
+            )
             fig.update_layout(
-                title="Forecast wind and solar output, next 48 h (UK time)",
-                yaxis_title="GW",
+                title="Carbon intensity: last 36 h and next 48 h (UK time)",
+                yaxis_title="gCO₂/kWh",
                 hovermode="x unified",
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             )
             st.plotly_chart(fig, width="stretch")
-            st.caption("More wind and sun means lower carbon. Each line is NESO's newest "
-                       "forecast for that half-hour.")  # fmt: skip
+            if err.notna().any():
+                mixed = ""
+                if mixes_versions(latest_issue, current):
+                    mixed = (" Where this model version has under 100 scored half-hours at a lead "
+                             "time, earlier versions' errors are included.")  # fmt: skip
+                st.caption("Shaded band: the forecast ± its average live error at that lead time "
+                           f"(Forecast accuracy tab).{mixed}")  # fmt: skip
+
+            outlook = rows_or_empty(
+                q,
+                f"""
+                select period_from, wind_mw, embedded_wind_mw, embedded_solar_mw
+                from marts.fct_wind_solar_outlook
+                where period_from between '{forecast.index.min()}' and '{forecast.index.max()}'
+                order by period_from
+            """,
+            )
+            st.subheader("Wind and solar outlook (NESO forecast)")
+            if outlook.empty:
+                st.info("No NESO wind or solar forecast loaded for the next 48 h yet.")
+            else:
+                fig = go.Figure()
+                for col, name, dash, colour in (
+                    ("wind_mw", "Wind farms (transmission)", "solid", BLUE),
+                    ("embedded_wind_mw", "Wind on local networks", "dot", BLUE),
+                    ("embedded_solar_mw", "Solar", "solid", YELLOW),
+                ):
+                    fig.add_scatter(x=uk(outlook.period_from), y=outlook[col] / 1000, name=name,
+                                    line=dict(color=colour, width=2, dash=dash))  # fmt: skip
+                fig.update_layout(
+                    title="Forecast wind and solar output, next 48 h (UK time)",
+                    yaxis_title="GW",
+                    hovermode="x unified",
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                )
+                st.plotly_chart(fig, width="stretch")
+                st.caption("More wind and sun means lower carbon. Each line is NESO's newest "
+                           "forecast for that half-hour.")  # fmt: skip
 
         mix = q("""
             select period_from, wind_pct as "Wind", gas_pct as "Gas", nuclear_pct as "Nuclear",
@@ -375,16 +399,19 @@ def main() -> None:
     with planner_tab:
         st.subheader("When should I run it?")
         hours = st.slider("How long does it run? (hours)", 0.5, float(MAX_TASK_H), 3.0, 0.5)
-        start, mean = greenest_window(advice, hours)
-        now_mean = advice.iloc[: max(1, round(hours * 2))].mean()
-        st.success(
-            f"Start at **{hhmm(start)}** for the cleanest {hours:g} h in the {span}: "
-            f"about **{mean:.0f} gCO₂/kWh**, vs {now_mean:.0f} if you start now "
-            f"(**{1 - mean / now_mean:.0%} less CO₂**)."
-        )
-        st.caption("Based on our latest 48 h forecast (NESO's for the first 6 h). "
-                   "7 kWh of EV charging at the cleanest time "
-                   f"emits about {7 * mean / 1000:.1f} kg CO₂.")  # fmt: skip
+        if forecast.empty:
+            st.info("No forecast yet: it appears after the next pipeline run.")
+        else:
+            start, mean = greenest_window(advice, hours)
+            now_mean = advice.iloc[: max(1, round(hours * 2))].mean()
+            st.success(
+                f"Start at **{hhmm(start)}** for the cleanest {hours:g} h in the {span}: "
+                f"about **{mean:.0f} gCO₂/kWh**, vs {now_mean:.0f} if you start now "
+                f"(**{1 - mean / now_mean:.0%} less CO₂**)."
+            )
+            st.caption("Based on our latest 48 h forecast (NESO's for the first 6 h). "
+                       "7 kWh of EV charging at the cleanest time "
+                       f"emits about {7 * mean / 1000:.1f} kg CO₂.")  # fmt: skip
 
     with greenest_tab:
         typical = q("""
@@ -570,33 +597,25 @@ def main() -> None:
             )
             st.plotly_chart(fig, width="stretch")
 
-            example = q("""
-                select issued_at, period_from, model_gco2_kwh, neso_gco2_kwh, actual_gco2_kwh
-                from marts.fct_model_vs_official
-                where issued_at = (
-                    select issued_at from marts.fct_model_vs_official
-                    group by issued_at order by count(actual_gco2_kwh) desc, issued_at desc
-                    limit 1
+            example = q(EXAMPLE_SQL)
+            if not example.empty:  # none yet in a forecast's first 48 h
+                fig = go.Figure()
+                for col, name, colour, dash in (
+                    ("actual_gco2_kwh", "What actually happened", BLUE, "solid"),
+                    ("model_gco2_kwh", "Our forecast", ORANGE, "solid"),
+                    ("neso_gco2_kwh", "NESO's forecast", AQUA, "dot"),
+                ):
+                    fig.add_scatter(x=uk(example.period_from), y=example[col], name=name,
+                                    line=dict(color=colour, width=2, dash=dash))  # fmt: skip
+                fig.update_layout(
+                    title="Example: the forecast made "
+                    f"{uk(example.issued_at.iloc[0]):%a %d %b, %H:%M} vs what happened (UK time)",
+                    yaxis_title="gCO₂/kWh",
+                    hovermode="x unified",
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
                 )
-                order by period_from
-            """)
-            fig = go.Figure()
-            for col, name, colour, dash in (
-                ("actual_gco2_kwh", "What actually happened", BLUE, "solid"),
-                ("model_gco2_kwh", "Our forecast", ORANGE, "solid"),
-                ("neso_gco2_kwh", "NESO's forecast", AQUA, "dot"),
-            ):
-                fig.add_scatter(x=uk(example.period_from), y=example[col], name=name,
-                                line=dict(color=colour, width=2, dash=dash))  # fmt: skip
-            fig.update_layout(
-                title=f"Example: the forecast made {uk(example.issued_at.iloc[0]):%a %d %b, %H:%M} "
-                "vs what happened (UK time)",
-                yaxis_title="gCO₂/kWh",
-                hovermode="x unified",
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            )
-            st.plotly_chart(fig, width="stretch")
-            st.caption("The most recent forecast whose whole 48 hours have now happened.")
+                st.plotly_chart(fig, width="stretch")
+                st.caption("The most recent forecast whose whole 48 hours have now happened.")
 
             with st.expander("Detailed numbers and what they mean"):
                 st.markdown(
