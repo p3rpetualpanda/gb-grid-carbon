@@ -264,8 +264,11 @@ def predict_live(con, now: datetime) -> pd.DataFrame:
     # A stalled NESO feed or a wind point missing from the snapshot leaves inputs that training
     # almost never saw: fall back to BASE_FEATURES, and label it, rather than publish v4 on them.
     cols, version = FEATURES, MODEL_VERSION
-    if rows[FEATURES].drop(columns=BASE_FEATURES).isna().any().any():
+    missing = rows[FEATURES].drop(columns=BASE_FEATURES).isna().sum()
+    if missing.any():
         cols, version = BASE_FEATURES, FALLBACK_VERSION
+        log.warning("forecast falls back to %s; leads missing per input: %s", version,
+                    missing[missing > 0].to_dict())  # fmt: skip
     train = training_rows(grid, wx_hist, hols, issue, neso)
     # Training rows before NESO's archives start have NaN inputs while live rows never do: log
     # the share covered so a thin history shows up in the pipeline log.

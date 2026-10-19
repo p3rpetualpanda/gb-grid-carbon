@@ -191,10 +191,13 @@ def test_backtest_scores_every_variant_on_the_same_rows(monkeypatch):
     assert far["model_neso"].round(2).eq(len(fc.BASE_FEATURES) + 3).all()
 
 
-def live_setup(monkeypatch, covered: int):
-    """In-memory warehouse issuing at day 10, with an embedded vintage covering `covered` targets.
+def live_setup(monkeypatch, covered: int, snapshot_skips: str | None = None):
+    """In-memory warehouse issuing at day 10, with an embedded vintage covering `covered` targets
+    and a weather snapshot for the next 50 h at every point except `snapshot_skips`.
     Returns (con, issue, dict that receives the feature frame the model predicts on)."""
     import duckdb
+
+    from gridcarbon.extract.weather import WEATHER_POINTS
 
     issue = START + pd.Timedelta(days=10)
     con = duckdb.connect()
@@ -206,6 +209,16 @@ def live_setup(monkeypatch, covered: int):
         "point_id varchar, wind_speed_100m double, shortwave_radiation double, "
         "temperature_2m double)"
     )
+    hours = pd.date_range(issue, periods=50, freq="h")
+    snapshot = pd.DataFrame(  # noqa: F841 (read by the insert below)
+        [
+            (issue, t, p.point_id, 20.0, 0.0, 10.0)
+            for t in hours
+            for p in WEATHER_POINTS
+            if p.point_id != snapshot_skips
+        ]
+    )
+    con.execute("insert into raw.weather_forecast_snapshots select * from snapshot")
     targets = pd.date_range(issue, periods=covered, freq="30min")
     embedded = pd.DataFrame(
         {
@@ -215,7 +228,8 @@ def live_setup(monkeypatch, covered: int):
             "neso_embedded_solar_mw": 200.0,
         }
     )
-    monkeypatch.setattr(fc, "load_history", lambda con: (spine(20), hourly_weather(20)))
+    wx_hist = hourly_weather(20)  # like the live archive, it stops before the issue
+    monkeypatch.setattr(fc, "load_history", lambda con: (spine(20), wx_hist[wx_hist.index < issue]))
     monkeypatch.setattr(fc, "load_neso_forecasts", lambda con: [embedded])
     seen = {}
 
@@ -241,18 +255,17 @@ def test_predict_live_uses_neso_embedded_forecasts(monkeypatch):
     assert "neso_wind_mw" not in seen["X"]  # transmission wind is mostly missing upstream
     assert (seen["X"]["neso_embedded_wind_mw"] == 1500.0).all()
     assert (seen["X"]["neso_embedded_solar_mw"] == 200.0).all()
-    assert seen["X"][fc.WIND_POINT_FEATURES].notna().all().all()
+    assert (seen["X"][fc.WIND_POINT_FEATURES] == 20.0).all().all()  # from the snapshot
 
 
-def test_predict_live_falls_back_when_a_wind_point_is_missing(monkeypatch):
+def test_predict_live_falls_back_when_a_wind_point_is_missing(monkeypatch, caplog):
     # e.g. Open-Meteo drops one location from the snapshot: v4 never trained on that gap.
-    con, issue, seen = live_setup(monkeypatch, covered=fc.HORIZON)
-    wx = hourly_weather(20)
-    wx.loc[wx.index >= issue, "wind_thames_offshore"] = np.nan
-    monkeypatch.setattr(fc, "load_history", lambda con: (spine(20), wx))
+    con, issue, seen = live_setup(monkeypatch, covered=fc.HORIZON, snapshot_skips="thames_offshore")
     out = fc.predict_live(con, issue.to_pydatetime())
     assert list(seen["X"].columns) == fc.BASE_FEATURES
     assert (out["model_version"] == fc.FALLBACK_VERSION).all()
+    # Falling back loses most of the backtest gain: say which input caused it.
+    assert "wind_thames_offshore" in caplog.text
 
 
 def test_predict_live_falls_back_without_a_full_neso_vintage(monkeypatch):
