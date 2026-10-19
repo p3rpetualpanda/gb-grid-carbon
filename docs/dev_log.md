@@ -227,3 +227,23 @@ ours) against actuals later.
 - The backtest report said forecasts were issued every 6 h; it is 6.5 h (`ISSUE_EVERY`), and the
   text now comes from that constant. Generation-mix totals treat a missing fuel as 0% instead of
   going NULL (dbt unit test).
+
+## 2026-10-19: neural net experiment (`analysis/nn_backtest.py`)
+
+- **Question:** does a neural network beat LightGBM v3? A PyTorch MLP (3 x 256, L1 loss, 20
+  epochs, settings fixed before the run) was trained on the same 12 folds, rows, 14 features
+  and persistence blend, on a local RTX 3090 (~4 s per seed per fold). PyTorch is not a project
+  dependency; the script's docstring has the install command.
+- **Result: a tie on its own, a small win as an average.** The MLP (mean of 5 seeds per fold)
+  scores MAE 20.5 vs LightGBM 20.9: -0.36, 95% interval -0.87 to +0.17, so not better. Single
+  seeds land at -0.22 to -0.29, all with intervals crossing zero, so the seed hardly matters.
+  The mean of LightGBM and the 5-seed MLP scores 20.3: -0.61 (-0.89 to -0.32), better at every
+  lead band, and its greenest-3h-window regret is 6.25 vs 6.70. The two models make partly
+  different errors, so averaging cancels some.
+- **Caveats:** the MLP is untuned (~22 s per fold for 5 seeds on the GPU). The persistence
+  blend was tuned for LightGBM. The ensemble is not live: it would need the pipeline to install
+  PyTorch (CPU training time on GitHub Actions not yet measured) and a live track record first.
+- **Decision: closed, no follow-up.** The gain is too small to be worth it: 0.45 gCO₂/kWh less
+  greenest-window regret (about 3 g CO₂ on a 7 kWh EV charge), against a 3 GB dependency in the
+  hourly run, a second model to maintain, and a backtest-to-live gap bigger than the gain. The
+  script stays so it can be re-run in a few minutes if the inputs change a lot.
