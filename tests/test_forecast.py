@@ -191,6 +191,8 @@ def test_predict_live_uses_neso_embedded_forecasts(monkeypatch):
     out = fc.predict_live(con, issue.to_pydatetime())
     assert len(out) == fc.HORIZON
     assert (out["model_version"] == fc.MODEL_VERSION).all()
+    # Raw stage-1 output and its version, stored now so a later correction step can't hide them.
+    assert out["yhat_base"].equals(out["yhat"]) and out["base_version"].equals(out["model_version"])
     assert "neso_wind_mw" not in seen["X"]  # transmission wind is mostly missing upstream
     assert (seen["X"]["neso_embedded_wind_mw"] == 1500.0).all()
     assert (seen["X"]["neso_embedded_solar_mw"] == 200.0).all()
@@ -203,3 +205,4 @@ def test_predict_live_falls_back_without_a_full_neso_vintage(monkeypatch):
     out = fc.predict_live(con, issue.to_pydatetime())
     assert list(seen["X"].columns) == fc.BASE_FEATURES
     assert (out["model_version"] == fc.FALLBACK_VERSION).all()
+    assert (out["base_version"] == fc.FALLBACK_VERSION).all()

@@ -71,13 +71,37 @@ def best_forecast(issue: pd.DataFrame) -> pd.Series:
     return blended.set_axis(issue["period_from"]).astype(float)
 
 
-def typical_error(issue: pd.DataFrame, scored: pd.DataFrame) -> pd.Series:
-    """Per half-hour: the live MAE, in that lead band, of whichever forecast best_forecast shows."""
-    band = pd.cut(issue["lead"], [0, 12, 24, 48, 96],
+MIN_SCORED = 100  # scored half-hours a model version needs in a band before its own MAE is used
+
+
+def _bands(issue: pd.DataFrame) -> pd.Series:
+    return pd.cut(issue["lead"], [0, 12, 24, 48, 96],
                   labels=["0-6 h", "6-12 h", "12-24 h", "24-48 h"]).astype(str)  # fmt: skip
+
+
+def typical_error(
+    issue: pd.DataFrame,
+    scored: pd.DataFrame,
+    current: pd.DataFrame | None = None,
+    min_n: int = MIN_SCORED,
+) -> pd.Series:
+    """Per half-hour: the live MAE, in that lead band, of whichever forecast best_forecast shows.
+    For our forecast, use `current` (the MAE of the model version that issued it, with row
+    counts `n`) in bands where it has at least `min_n` rows; elsewhere every version's MAE."""
+    band = _bands(issue)
     mae = scored.set_index("band")
-    err = band.map(mae["neso_mae"]).where(_shows_neso(issue), band.map(mae["our_mae"]))
+    ours = mae["our_mae"]
+    if current is not None and not current.empty:
+        cur = current.set_index("band")
+        ours = cur["our_mae"].where(cur["n"] >= min_n).combine_first(ours)
+    err = band.map(mae["neso_mae"]).where(_shows_neso(issue), band.map(ours))
     return err.set_axis(issue["period_from"]).astype(float)
+
+
+def mixes_versions(issue: pd.DataFrame, current: pd.DataFrame, min_n: int = MIN_SCORED) -> bool:
+    """True if any band where our forecast is shown falls back to every version's MAE."""
+    enough = set(current.loc[current["n"] >= min_n, "band"]) if not current.empty else set()
+    return not set(_bands(issue)[~_shows_neso(issue)]) <= enough
 
 
 def main() -> None:
@@ -147,7 +171,27 @@ def main() -> None:
         group by grouping sets ((band), ())
         order by grouping(band), min(lead)
     """)
-    err = typical_error(latest_issue, scored)
+    # MAE of the model version that issued the forecast shown (reads ml.model_forecasts, which
+    # MotherDuck already has, so this works before dbt rebuilds the marts).
+    current = rows_or_empty(
+        q,
+        """
+        select band, count(*) as n, avg(model_abs_error) as our_mae
+        from (
+            select f.model_abs_error,
+                   case when f.lead <= 12 then '0-6 h' when f.lead <= 24 then '6-12 h'
+                        when f.lead <= 48 then '12-24 h' else '24-48 h' end as band
+            from marts.fct_model_vs_official as f
+            join ml.model_forecasts as m using (issued_at, period_from)
+            where f.actual_gco2_kwh is not null and f.neso_abs_error is not null
+              and m.model_version = (
+                  select model_version from ml.model_forecasts order by issued_at desc limit 1
+              )
+        )
+        group by band
+        """,
+    )
+    err = typical_error(latest_issue, scored, current)
 
     now_tab, planner_tab, greenest_tab, trends_tab, regions_tab, accuracy_tab, about_tab = st.tabs(
         [
@@ -207,8 +251,12 @@ def main() -> None:
         )
         st.plotly_chart(fig, width="stretch")
         if err.notna().any():
+            mixed = ""
+            if mixes_versions(latest_issue, current):
+                mixed = (" Where this model version has under 100 scored half-hours at a lead "
+                         "time, earlier versions' errors are included.")  # fmt: skip
             st.caption("Shaded band: the forecast ± its average live error at that lead time "
-                       "(Forecast accuracy tab).")  # fmt: skip
+                       f"(Forecast accuracy tab).{mixed}")  # fmt: skip
 
         outlook = rows_or_empty(
             q,
