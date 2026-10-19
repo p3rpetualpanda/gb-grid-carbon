@@ -9,6 +9,7 @@ Run after `dbt build` (local warehouse):  python analysis/backtest.py   (~1-3 mi
 from __future__ import annotations
 
 import json
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -23,6 +24,7 @@ from gridcarbon.config import Settings  # noqa: E402
 from gridcarbon.load import connect  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.stdout.reconfigure(encoding="utf-8")  # the report prints "gCO₂"; Windows' cp1252 can't
 BLUE, ORANGE, AQUA, YELLOW, MAGENTA, VIOLET = (
     "#2a78d6",
     "#eb6834",
