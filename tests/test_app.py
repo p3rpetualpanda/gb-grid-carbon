@@ -84,3 +84,19 @@ def test_rows_or_empty_survives_a_table_dbt_has_not_built_yet():
     assert app.rows_or_empty(lambda sql: con.sql(sql).df(), "select * from nope").empty
     with pytest.raises(duckdb.ParserException):  # other errors still surface
         app.rows_or_empty(lambda sql: con.sql(sql).df(), "selec 1")
+
+
+def test_day_windows_wrap_past_midnight():
+    # A typical day by half-hour slot: cleanest at 23:00-00:30 (slots 46, 47, 0), dirtiest 18:00.
+    day = pd.Series(100.0, index=range(48))
+    day[[46, 47, 0]] = 10.0
+    day[36] = 400.0
+    means = app.day_windows(day, 1.5)
+    assert len(means) == 48  # one window per start slot, wrapping into the next day
+    assert means.idxmin() == 46 and means.min() == 10.0
+    assert means.idxmax() in (34, 35, 36)
+
+
+def test_slot_label():
+    assert app.slot_label(0) == "00:00" and app.slot_label(47) == "23:30"
+    assert app.slot_label(50) == "01:00"  # a window ending after midnight

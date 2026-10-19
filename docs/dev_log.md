@@ -155,3 +155,14 @@ ours) against actuals later.
 - **Fallback label.** The NESO fallback was labelled `lgbm-direct-v2`, the same as the old
   model, so the 6 pre-v3 forecasts on 18 Oct looked like fallback runs. None were: every run
   since v3 merged used v3. The fallback is now `lgbm-direct-v3-fallback`.
+
+## 2026-10-19: "When is it greenest?" tab reworked
+
+- **From one heatmap to an answer.** The tab now asks for a month and a task length, then states
+  the greenest and dirtiest window of that length (UK time, last 12 months) and the share of
+  emissions saved by moving from one to the other. A typical-day chart splits weekdays from
+  weekends (weekends are much cleaner) and shades the greenest window, and a table lists both
+  windows for every month. The heatmap keeps the all-months view, now with month names, times
+  and hover values.
+- **Windows wrap past midnight.** In winter the cleanest block is overnight, so the window search
+  runs over two copies of the typical day (`day_windows`, tested); a 23:00-02:00 block counts.
