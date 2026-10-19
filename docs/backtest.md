@@ -39,6 +39,56 @@ flattering benchmark at long leads. The fair head-to-head is the live track reco
 so training weather is closer to a short-range forecast than a true 48 h one. Expect live errors
 at long leads to be somewhat higher than this backtest.
 
+**Bias** (mean of forecast minus actual, gCO₂/kWh; + = too high), by lead and by month:
+
+|  | Our model (LightGBM + NESO embedded wind/solar) | Previous model (no NESO inputs) | + NESO transmission wind | NESO published forecast* | Last known actual | Same slot, last known day | Same slot, last week |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 0-6h | 0.4 | 2.8 | 0.3 | 0.1 | 0.2 | 0.2 | 0.7 |
+| 6-12h | 1 | 5.9 | 0.6 | 0.2 | 0.1 | 0.1 | 0.7 |
+| 12-24h | 1.2 | 7.2 | 1 | 0.2 | 0.2 | 0 | 0.7 |
+| 24-48h | 1.8 | 7.8 | 2.2 | 0.1 | 0.1 | -0 | 0.6 |
+| all | 1.4 | 6.8 | 1.5 | 0.1 | 0.1 | 0 | 0.6 |
+
+|  | Our model (LightGBM + NESO embedded wind/solar) | Previous model (no NESO inputs) | NESO published forecast* |
+| --- | --- | --- | --- |
+| 2025-10 | 7.4 | 10 | 0.6 |
+| 2025-11 | 7.5 | 12.7 | 3.4 |
+| 2025-12 | 3.5 | 12.3 | 3 |
+| 2026-01 | 0.3 | 13.7 | 1.8 |
+| 2026-02 | -0.6 | 7.2 | 2 |
+| 2026-03 | 2.2 | 2.4 | 0.5 |
+| 2026-04 | 7.7 | 13.2 | -0.7 |
+| 2026-05 | -9.2 | -3.9 | -0.8 |
+| 2026-06 | -14.8 | -4.7 | -0.4 |
+| 2026-07 | 3 | 7.1 | -0.9 |
+| 2026-08 | 9.5 | 9.2 | -1.3 |
+| 2026-09 | 0.7 | 2.5 | -5.5 |
+| 2026-10 | -18.6 | -3.8 | 1 |
+
+**Greenest 3 h window.** For each forecast, pick the cleanest 3 h block it predicts and compare
+the actual intensity in that block with the truly cleanest block. Regret is the gap in gCO₂/kWh
+(0 = picked the best block); a forecast that is off by a constant has zero regret.
+
+|  | mean regret | share within 5 of best |
+| --- | --- | --- |
+| Our model (LightGBM + NESO embedded wind/solar) | 6.63 | 0.676 |
+| Previous model (no NESO inputs) | 9.46 | 0.565 |
+| + NESO transmission wind | 6.83 | 0.671 |
+| NESO published forecast* | 2.99 | 0.83 |
+| Last known actual | 57.5 | 0.128 |
+| Same slot, last known day | 30.4 | 0.295 |
+| Same slot, last week | 28 | 0.337 |
+
+**Is a variant really different from the live model?** MAE difference on the same rows, with a
+95% interval from resampling 3-day blocks (errors within a day, and weather spells, move
+together). A variant is better
+only if the whole interval is below zero.
+
+|  | MAE minus live model | 95% low | 95% high |
+| --- | --- | --- | --- |
+| Previous model (no NESO inputs) | 5.83 | 4.64 | 7.02 |
+| + NESO transmission wind | -0.01 | -0.25 | 0.21 |
+
 **What drives the model** (share of total gain):
 
 |  | gain_share |

@@ -47,7 +47,7 @@ From [`docs/findings.md`](docs/findings.md) (every number computed by `analysis/
 
 A direct multi-horizon LightGBM model predicts all 96 half-hours of the next 48 h from the
 calendar, recent actuals, forecast weather and NESO's own embedded wind/solar forecasts. Over a 12-month
-rolling-origin backtest (last run <!-- bt:run_date -->2026-10-18<!-- /bt -->) its MAE is **<!-- bt:model_mae -->20.9<!-- /bt --> gCO₂/kWh**,
+rolling-origin backtest (last run <!-- bt:run_date -->2026-10-19<!-- /bt -->) its MAE is **<!-- bt:model_mae -->20.9<!-- /bt --> gCO₂/kWh**,
 **<!-- bt:improvement -->53%<!-- /bt --> better** than the best naïve baseline (<!-- bt:best_baseline_mae -->44.3<!-- /bt -->), and it beats "repeat the last
 actual" at every lead time. NESO's published forecast scores <!-- bt:neso_mae -->9.9<!-- /bt -->, but the API keeps only NESO's *final*, short-lead forecast, so the fair comparison is the
 **live track record**: both forecasts issued in the same pipeline run, scored when actuals arrive
