@@ -25,8 +25,9 @@ ACTUAL_LAG = pd.Timedelta(hours=1)  # actuals publish late: never use the last h
 # half-hour of the day. Live runs issue at any half-hour; a fixed 6 h grid left (lead, slot)
 # combinations unseen and skewed live forecasts.
 ISSUE_EVERY = "390min"
-MODEL_VERSION = "lgbm-direct-v3"
-FALLBACK_VERSION = "lgbm-direct-v3-fallback"  # BASE_FEATURES only, when NESO inputs are missing
+MODEL_VERSION = "lgbm-direct-v4"
+# BASE_FEATURES only, when NESO or wind-point inputs are missing
+FALLBACK_VERSION = "lgbm-direct-v4-fallback"
 # Short leads lean on the last known actual: weight exp(-(lead-1)/6). Decay chosen on the first
 # 6 backtest months, checked on the last 6 (0-2 h MAE 19.1 -> 17.0; overall unchanged).
 PERSISTENCE_DECAY = 6
@@ -38,13 +39,14 @@ BASE_FEATURES = [
 # Inputs from NESO's own forecasts (raw.neso_*), each the latest vintage made at least NESO_LAG
 # before issue.
 NESO_FEATURES = ["neso_wind_mw", "neso_embedded_wind_mw", "neso_embedded_solar_mw"]
-# The live model (v3) uses the embedded forecasts but not transmission wind: NESO's day-ahead wind
-# archive only covers the day it is published, so most 48 h targets have no vintage. Revisit once
-# raw.neso_wind_14d_snapshots has a few weeks of history.
-FEATURES = BASE_FEATURES + ["neso_embedded_wind_mw", "neso_embedded_solar_mw"]
+# The live model (v3 on) uses the embedded forecasts but not transmission wind: NESO's day-ahead
+# wind archive only covers the day it is published, so most 48 h targets have no vintage. Revisit
+# once raw.neso_wind_14d_snapshots has a few weeks of history.
 # Forecast wind speed at each wind point (extract/weather.py WIND_POINTS), separately: the GB
-# average hides calm in one cluster while another blows. Candidate inputs, not yet live.
+# average hides calm in one cluster while another blows. Live from v4.
 WIND_POINT_FEATURES = [f"wind_{p}" for p in WIND_POINTS]
+V3_FEATURES = BASE_FEATURES + ["neso_embedded_wind_mw", "neso_embedded_solar_mw"]
+FEATURES = V3_FEATURES + WIND_POINT_FEATURES
 NESO_LAG = pd.Timedelta(minutes=30)  # allowance for publication after Forecast_Timestamp
 NESO_SQL = {
     "raw.neso_wind_forecast": "forecast_mw as neso_wind_mw",
@@ -259,8 +261,8 @@ def predict_live(con, now: datetime) -> pd.DataFrame:
         .set_index("hour_utc")
     )
     rows = features(grid, wx_live.combine_first(wx_hist), pd.DatetimeIndex([issue]), hols, neso)
-    # A stalled NESO feed leaves targets uncovered, which training almost never saw: fall back to
-    # the model without NESO inputs, and label it, rather than publish v3 on unfamiliar inputs.
+    # A stalled NESO feed or a wind point missing from the snapshot leaves inputs that training
+    # almost never saw: fall back to BASE_FEATURES, and label it, rather than publish v4 on them.
     cols, version = FEATURES, MODEL_VERSION
     if rows[FEATURES].drop(columns=BASE_FEATURES).isna().any().any():
         cols, version = BASE_FEATURES, FALLBACK_VERSION
@@ -268,7 +270,8 @@ def predict_live(con, now: datetime) -> pd.DataFrame:
     # Training rows before NESO's archives start have NaN inputs while live rows never do: log
     # the share covered so a thin history shows up in the pipeline log.
     covered = train[FEATURES].drop(columns=BASE_FEATURES).notna().all(axis=1).mean()
-    log.info("forecast %s: %.0f%% of training rows have NESO inputs", version, 100 * covered)
+    log.info("forecast %s: %.0f%% of training rows have NESO and wind-point inputs", version,
+             100 * covered)  # fmt: skip
     model = fit(train, cols)
     yhat = blend(rows, model.predict(rows[cols]))
     return pd.DataFrame(

@@ -47,28 +47,28 @@ con = connect(Settings(db_target="local"))
 grid, wx = fc.load_history(con)
 hols = fc.holidays()
 neso = fc.load_neso_forecasts(con)
-# The live model (v3: + NESO embedded wind/solar), the previous one (v2: no NESO inputs) and one
-# that also adds NESO's transmission wind forecast, all trained and scored on the same folds.
+# The live model (v4: + wind at each wind point), the previous ones (v3: no wind points; v2: no
+# NESO inputs either) and v2 plus NESO's transmission wind forecast, all on the same folds.
 variants = {
     "model": fc.FEATURES,
+    "model_v3": fc.V3_FEATURES,
     "model_v2": fc.BASE_FEATURES,
     "model_neso_wind": fc.BASE_FEATURES + fc.NESO_FEATURES,
-    "model_wind_points": fc.FEATURES + fc.WIND_POINT_FEATURES,
 }
-# A wind point with gaps would quietly weaken model_wind_points; show coverage before trusting it.
+# A wind point with gaps would quietly weaken the model; show coverage before trusting it.
 print(
     "Non-null share per wind point:", wx[fc.WIND_POINT_FEATURES].notna().mean().round(3).to_dict()
 )
 preds = fc.backtest(grid, wx, hols, months=12, neso=neso, variants=variants)
-methods = {"model": "Our model (LightGBM + NESO embedded wind/solar)",
-           "model_v2": "Previous model (no NESO inputs)",
-           "model_neso_wind": "+ NESO transmission wind",
-           "model_wind_points": "+ wind at each wind-farm point",
+methods = {"model": "Our model (LightGBM + NESO + wind-farm points)",
+           "model_v3": "Previous model (no wind-farm points)",
+           "model_v2": "v2 (no NESO inputs)",
+           "model_neso_wind": "v2 + NESO transmission wind",
            "neso": "NESO published forecast*",
            "last_actual": "Last known actual",
            "lag_day": "Same slot, last known day", "lag_week": "Same slot, last week"}  # fmt: skip
 table = fc.mae_by_lead(preds, list(methods))
-VARIANTS = ("model_v2", "model_neso_wind", "model_wind_points")  # each compared with the live one
+VARIANTS = ("model_v3", "model_v2", "model_neso_wind")  # each compared with the live one
 
 # Chart: MAE by lead band, one line per method (legend + direct labels).
 bands = [b for b in table.index if b != "all"]
@@ -123,7 +123,7 @@ lead_band = pd.cut(complete["lead"] * 0.5, [0, 6, 12, 24, 48],
 bias = signed.groupby(lead_band, observed=True).mean()
 bias.loc["all"] = signed.mean()
 month = complete["period_from"].dt.tz_convert("Europe/London").dt.strftime("%Y-%m")
-bias_month = signed[["model", "model_v2", "neso"]].groupby(month).mean()
+bias_month = signed[["model", "model_v3", "model_v2", "neso"]].groupby(month).mean()
 regret = fc.window_regret(complete, list(methods), hours=3)
 regret_table = pd.DataFrame(
     {"mean regret": regret.mean(), "share within 5 of best": (regret <= 5).mean()}
@@ -150,14 +150,14 @@ Open-Meteo's *historical forecast*, never observed weather. These rules are enfo
 
 **Result.** Over all leads the model's MAE is **{overall["model"]:.1f} gCO₂/kWh**, vs
 **{best_baseline:.1f}** for the best naïve baseline (**{1 - overall["model"] / best_baseline:.0%}
-better**) and **{overall["neso"]:.1f}** for NESO's published forecast. The model uses NESO's own
-embedded wind/solar forecasts as inputs (the vintage issued before each forecast, never a later
-one); without them (the previous model) it scores **{overall["model_v2"]:.1f}**. Also adding
-NESO's transmission wind forecast gives **{overall["model_neso_wind"]:.1f}**, but its archive only
-covers the day each forecast is published, so most 48 h targets lack it and it is left out.
-Adding forecast wind speed at each of {len(fc.WIND_POINT_FEATURES)} wind points as separate inputs
-(the wind-farm clusters plus the points already averaged) gives
-**{overall["model_wind_points"]:.1f}** (a candidate, not live).
+better**) and **{overall["neso"]:.1f}** for NESO's published forecast. The model takes forecast
+wind speed at each of {len(fc.WIND_POINT_FEATURES)} wind points as separate inputs (the wind-farm
+clusters plus the points already averaged); without them (the previous model, v3) it scores
+**{overall["model_v3"]:.1f}**. It also uses NESO's own embedded wind/solar forecasts (the vintage
+issued before each forecast, never a later one); without those too (v2) it scores
+**{overall["model_v2"]:.1f}**. Adding NESO's transmission wind forecast to v2 gives
+**{overall["model_neso_wind"]:.1f}**, but its archive only covers the day each forecast is
+published, so most 48 h targets lack it and it is left out.
 
 ![MAE by lead](img/backtest_mae_by_lead.png)
 
@@ -205,6 +205,7 @@ results = {
     "improvement": round(float(1 - overall["model"] / best_baseline), 3),
     "neso_mae": round(float(overall["neso"]), 1),
     "previous_model_mae": round(float(overall["model_v2"]), 1),  # v2: no NESO inputs
+    "v3_model_mae": round(float(overall["model_v3"]), 1),  # v3: no wind-farm points
 }
 (ROOT / "docs" / "backtest_results.json").write_text(
     json.dumps(results, indent=2) + "\n", encoding="utf-8"

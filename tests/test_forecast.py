@@ -53,7 +53,7 @@ def test_wind_points_are_pinned():
         "east_anglia_offshore", "thames_offshore", "southern_uplands",
     )  # fmt: skip
     assert [f"wind_{p}" for p in expected] == fc.WIND_POINT_FEATURES
-    assert not set(fc.WIND_POINT_FEATURES) & set(fc.FEATURES)
+    assert fc.FEATURES[-len(fc.WIND_POINT_FEATURES) :] == fc.WIND_POINT_FEATURES  # live in v4
 
 
 def test_features_never_use_data_after_issue_minus_lag():
@@ -241,6 +241,18 @@ def test_predict_live_uses_neso_embedded_forecasts(monkeypatch):
     assert "neso_wind_mw" not in seen["X"]  # transmission wind is mostly missing upstream
     assert (seen["X"]["neso_embedded_wind_mw"] == 1500.0).all()
     assert (seen["X"]["neso_embedded_solar_mw"] == 200.0).all()
+    assert seen["X"][fc.WIND_POINT_FEATURES].notna().all().all()
+
+
+def test_predict_live_falls_back_when_a_wind_point_is_missing(monkeypatch):
+    # e.g. Open-Meteo drops one location from the snapshot: v4 never trained on that gap.
+    con, issue, seen = live_setup(monkeypatch, covered=fc.HORIZON)
+    wx = hourly_weather(20)
+    wx.loc[wx.index >= issue, "wind_thames_offshore"] = np.nan
+    monkeypatch.setattr(fc, "load_history", lambda con: (spine(20), wx))
+    out = fc.predict_live(con, issue.to_pydatetime())
+    assert list(seen["X"].columns) == fc.BASE_FEATURES
+    assert (out["model_version"] == fc.FALLBACK_VERSION).all()
 
 
 def test_predict_live_falls_back_without_a_full_neso_vintage(monkeypatch):
@@ -375,8 +387,7 @@ def test_fit_tolerates_all_missing_wind_point_columns():
     grid = spine(30)
     wx = hourly_weather(30)
     wx[fc.WIND_POINT_FEATURES] = np.nan
-    cols = fc.FEATURES + fc.WIND_POINT_FEATURES
-    model = fc.fit(fc.training_rows(grid, wx, set(), START + pd.Timedelta(days=25)), cols)
+    model = fc.fit(fc.training_rows(grid, wx, set(), START + pd.Timedelta(days=25)))
     test = fc.features(grid, wx, pd.DatetimeIndex([START + pd.Timedelta(days=27)]), set())
     assert test[fc.WIND_POINT_FEATURES].isna().all().all()
-    assert np.isfinite(model.predict(test[cols])).all()
+    assert np.isfinite(model.predict(test[fc.FEATURES])).all()

@@ -12,7 +12,7 @@ Material for the CV, LinkedIn and interviews. Every number comes from `docs/find
   31 December in year-spanning requests (missing data 10.4% → 0.29%), and 16 impossible upstream
   forecasts caught by a dbt range test.
 - Developed a 48-hour LightGBM carbon-intensity forecast with leakage-safe features and a 12-month
-  rolling-origin backtest; MAE <!-- bt:model_mae -->20.9<!-- /bt --> gCO₂/kWh, <!-- bt:improvement -->53%<!-- /bt --> better than naïve baselines, and scored live
+  rolling-origin backtest; MAE <!-- bt:model_mae -->18.7<!-- /bt --> gCO₂/kWh, <!-- bt:improvement -->58%<!-- /bt --> better than naïve baselines, and scored live
   against the system operator's forecast every pipeline run.
 - Analysed 9 years of grid data with bootstrap confidence intervals: intensity fell 48% (2018–2025),
   midday is now the cleanest time from spring to autumn, and smart EV charging cuts charging
@@ -78,7 +78,7 @@ enforce all three.
 The API only keeps NESO's final forecast, likely made shortly before the half-hour, and NESO also
 has generation schedules I don't. So the backtest comparison flatters NESO at long leads. The fair
 test is the live track record: both forecasts issued in the same run. My model's job is to beat
-naïve baselines (<!-- bt:improvement -->53%<!-- /bt --> better) and to be honest about where it stands.
+naïve baselines (<!-- bt:improvement -->58%<!-- /bt --> better) and to be honest about where it stands.
 
 **Tell me about a bug you found.**
 On day one the live forecast said ~170 when the last actual was 88 (the truth was 86). Two causes:

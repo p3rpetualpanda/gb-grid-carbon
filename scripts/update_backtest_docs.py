@@ -26,6 +26,7 @@ def values(results: dict) -> dict[str, str]:
         "best_baseline_mae": f"{results['best_baseline_mae']:.1f}",
         "neso_mae": f"{results['neso_mae']:.1f}",
         "previous_model_mae": f"{results['previous_model_mae']:.1f}",
+        "v3_model_mae": f"{results['v3_model_mae']:.1f}",
         "improvement": f"{results['improvement']:.0%}",
     }
 
