@@ -133,3 +133,34 @@ def test_typical_day_weights_weekdays_and_weekends_by_count():
     out = app.typical_day(typical)
     assert out.index.tolist() == [1]  # month 2 lacks a slot
     assert (out.loc[1] == 80.0).all()  # (5 * 100 + 2 * 30) / 7, not the plain mean 65
+
+
+def test_hhmm_survives_missing_timestamps():
+    assert app.hhmm(pd.NaT) == "–"
+    assert app.hhmm(pd.Timestamp("2024-07-01 12:00", tz="UTC")) == "Mon 13:00"
+
+
+def test_motherduck_database_follows_the_pipeline_setting(monkeypatch):
+    monkeypatch.delenv("MOTHERDUCK_DATABASE", raising=False)
+    assert app.motherduck_url() == "md:gridcarbon"
+    monkeypatch.setenv("MOTHERDUCK_DATABASE", "gridcarbon_dev")
+    assert app.motherduck_url() == "md:gridcarbon_dev"
+
+
+def test_example_is_the_latest_fully_scored_issue():
+    import duckdb
+
+    con = duckdb.connect()
+    con.execute("create schema marts")
+    con.execute("""
+        create table marts.fct_model_vs_official as
+        select * from (values
+            ('2024-01-01'::timestamp, 1, 100), ('2024-01-01', 2, 100),  -- complete
+            ('2024-01-02', 1, 100), ('2024-01-02', 2, null),          -- newer, part scored
+            ('2024-01-03', 1, null), ('2024-01-03', 2, null)
+        ) t(issued_at, period_from, actual_gco2_kwh)
+    """)
+    example = con.sql(app.EXAMPLE_SQL.replace(
+        "issued_at, period_from, model_gco2_kwh, neso_gco2_kwh, actual_gco2_kwh", "*"
+    )).df()  # fmt: skip
+    assert set(example["issued_at"]) == {pd.Timestamp("2024-01-01")}

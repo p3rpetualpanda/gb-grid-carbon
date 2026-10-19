@@ -113,3 +113,10 @@ def test_loaded_windows_roundtrip(con):
     log_window(con, "r1", "intensity", T0, T0 + timedelta(days=31), 1488)
     assert loaded_windows(con, "intensity") == {(T0, T0 + timedelta(days=31))}
     assert loaded_windows(con, "generation") == set()
+
+
+def test_tracked_run_keeps_warnings_on_success(con):
+    with tracked_run(con, "partial") as run:
+        run.setdefault("warnings", []).append("neso_wind_forecast: RuntimeError: down")
+    status, err = con.execute("SELECT status, error FROM meta.pipeline_runs").fetchone()
+    assert status == "success" and "neso_wind_forecast" in err

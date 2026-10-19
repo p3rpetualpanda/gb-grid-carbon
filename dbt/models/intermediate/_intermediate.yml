@@ -1,0 +1,15 @@
+version: 2
+
+unit_tests:
+  - name: mix_totals_treat_a_missing_fuel_as_zero
+    description: A period without a coal row still gets its fossil and renewable totals.
+    model: int_generation_mix_wide
+    given:
+      - input: ref('stg_generation_mix')
+        rows:
+          - {period_from: "2024-01-01 00:00:00+00", fuel: gas, share_pct: 30}
+          - {period_from: "2024-01-01 00:00:00+00", fuel: wind, share_pct: 40}
+          - {period_from: "2024-01-01 00:00:00+00", fuel: nuclear, share_pct: 30}
+    expect:
+      rows:
+        - {renewable_pct: 40, low_carbon_pct: 70, fossil_pct: 30}

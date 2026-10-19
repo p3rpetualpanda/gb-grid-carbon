@@ -15,7 +15,7 @@ from gridcarbon.pipeline import (
     BACKFILL_DEFAULT,
     DATASETS,
     INCREMENTAL_DEFAULT,
-    incremental_window,
+    load_incremental,
     load_range,
     snapshot_forecasts,
 )
@@ -114,12 +114,12 @@ def incremental(
     now = utcnow()
     with tracked_run(con, "incremental") as run:
         for name in names:
-            ds = DATASETS[name]
-            start, end = incremental_window(con, ds, now, lookback)
-            load_range(con, client, ds, start, end, run)
+            load_incremental(con, client, DATASETS[name], now, lookback, run)
         if snapshots:
             snapshot_forecasts(con, client, now, run)
     typer.echo(f"Incremental finished: {run['rows_loaded']:,} rows (run {run['run_id']}).")
+    for warning in run.get("warnings", []):
+        typer.echo(f"Skipped: {warning}", err=True)
 
 
 @app.command()

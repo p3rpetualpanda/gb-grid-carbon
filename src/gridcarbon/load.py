@@ -178,7 +178,8 @@ def tracked_run(con: duckdb.DuckDBPyConnection, command: str) -> Iterator[dict]:
     except BaseException as exc:
         _finish_run(con, run, "failed", f"{type(exc).__name__}: {exc}"[:2000])
         raise
-    _finish_run(con, run, "success", None)
+    # Optional datasets that failed (pipeline.load_incremental) leave the run a success, noted.
+    _finish_run(con, run, "success", "; ".join(run.get("warnings", []))[:2000] or None)
 
 
 def _finish_run(con, run: dict, status: str, error: str | None) -> None:
