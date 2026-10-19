@@ -40,3 +40,6 @@ Thumbs.db
 CLAUDE.md
 mistakes.md
 next-steps.md
+
+# graphify knowledge graph: generated locally, holds machine paths
+graphify-out/
