@@ -290,3 +290,16 @@ ours) against actuals later.
   the MAE gain, but worth watching on the live track record.
 - **Docs:** README phase 10 now shows v2 → v3 and phase 11 v3 → v4, using a new `v3_model_mae`
   marker in `backtest_results.json`, so each row keeps the gain it actually made.
+
+## 2026-10-20: NESO embedded history was missing on MotherDuck
+
+- **Problem:** the NESO embedded wind/solar archive (2022 onwards) was only ever loaded into the
+  local warehouse, where the backtest runs. MotherDuck had snapshots since 15 Oct only, so in live
+  training 0.2% of rows had those two inputs. Live v3 (from 18 Oct) and v4 (from 19 Oct 16:13 UTC)
+  were therefore not the models the backtest scored. The pipeline log said so on every run
+  ("0% of training rows have NESO inputs").
+- **Fix:** `backfill -d neso_embedded_forecast --no-resume` on MotherDuck, 20 Oct 08:16-10:39 UTC:
+  6,006,718 rows upserted. Rows per year now match the local warehouse for 2022-2025. Live training
+  coverage of both inputs is 99.9%.
+- **Track record:** live forecasts issued before 10:39 UTC on 20 Oct trained without NESO
+  history. Start any v4 live-vs-backtest comparison after that time.
