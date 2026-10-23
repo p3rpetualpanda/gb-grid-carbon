@@ -168,6 +168,14 @@ def typical_error(
     return err.set_axis(issue["period_from"]).astype(float)
 
 
+def past_forecast(issues: pd.DataFrame, scored: pd.DataFrame) -> pd.Series:
+    """Per past half-hour: our forecast from the lead band with the lowest live MAE that has one,
+    newest issue first within it. Ranked by band, never by distance to the actual (hindsight)."""
+    rank = _bands(issues).map(scored.set_index("band")["our_mae"])
+    best = issues.assign(rank=rank).sort_values(["rank", "lead"]).drop_duplicates("period_from")
+    return best.set_index("period_from")["model_gco2_kwh"].sort_index().astype(float)
+
+
 def mixes_versions(issue: pd.DataFrame, current: pd.DataFrame, min_n: int = MIN_SCORED) -> bool:
     """True if any band where our forecast is shown falls back to every version's MAE."""
     enough = set(current.loc[current["n"] >= min_n, "band"]) if not current.empty else set()
@@ -294,6 +302,14 @@ def main() -> None:
                                     - interval 36 hour
                 order by period_from
             """)
+            hindcast = past_forecast(
+                q(f"""
+                    select period_from, lead, model_gco2_kwh from marts.fct_model_vs_official
+                    where period_from between '{past.period_from.min()}'
+                                          and '{past.period_from.max()}'
+                """),
+                scored,
+            )
             fig = go.Figure()
             if err.notna().any():
                 # Band first so the lines draw on top; tonexty fills between lower and upper.
@@ -304,6 +320,9 @@ def main() -> None:
                                 hoverinfo="skip", name="± typical error (live MAE)")  # fmt: skip
             fig.add_scatter(x=uk(past.period_from), y=past.actual_gco2_kwh, name="Actual",
                             line=dict(color=BLUE, width=2))  # fmt: skip
+            fig.add_scatter(x=uk(hindcast.index), y=hindcast,
+                            name="Our past forecast",
+                            line=dict(color=ORANGE, width=2, dash="dash"))  # fmt: skip
             fig.add_scatter(x=uk(forecast.index), y=forecast,
                             name="Our forecast (NESO's for 0-6 h)",
                             line=dict(color=ORANGE, width=2))  # fmt: skip
@@ -314,12 +333,21 @@ def main() -> None:
                 line=dict(color=AQUA, width=2, dash="dot"),
             )
             fig.update_layout(
-                title="Carbon intensity: last 36 h and next 48 h (UK time)",
+                title="Carbon intensity: actual vs our forecast for the last 36 h, "
+                "and the next 48 h (UK time)",
                 yaxis_title="gCO₂/kWh",
                 hovermode="x unified",
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             )
             st.plotly_chart(fig, width="stretch")
+            ranked = scored[scored.band != "All"].sort_values("our_mae")
+            source = "the newest forecast made before it (no live track record yet)"
+            if not ranked.empty:
+                source = (f"the lead time with the lowest live error ({ranked.band.iloc[0]} "
+                          "ahead, falling back to the next best where it has none)")  # fmt: skip
+            st.caption(f"Dashed orange: our model's forecast for each of the last 36 h, from "
+                       f"{source}. The lead is chosen by its average error, not by how close "
+                       "it came to the actual.")  # fmt: skip
             if err.notna().any():
                 mixed = ""
                 if mixes_versions(latest_issue, current):

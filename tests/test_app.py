@@ -57,6 +57,22 @@ def test_typical_error_follows_the_forecast_shown_and_its_lead_band():
     assert app.typical_error(issue, scored.iloc[:0]).isna().all()  # no track record yet
 
 
+def test_past_forecast_takes_each_half_hour_from_the_lowest_mae_lead_band():
+    issues = pd.DataFrame({
+        "period_from": [IDX[0], IDX[0], IDX[0], IDX[1], IDX[1], IDX[2]],
+        "lead": [2, 14, 20, 3, 30, 5],
+        "model_gco2_kwh": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+    })  # fmt: skip
+    scored = pd.DataFrame({
+        "band": ["0-6 h", "6-12 h", "12-24 h", "All"], "our_mae": [30.0, 10.0, 20.0, 15.0],
+    })  # fmt: skip
+    out = app.past_forecast(issues, scored)
+    # 6-12 h scores best, newest issue (shortest lead) within it; else the next-best band.
+    assert out.tolist() == [2.0, 5.0, 6.0] and out.index.equals(IDX[:3])
+    # No track record yet: the newest issue for each half-hour.
+    assert app.past_forecast(issues, scored.iloc[:0]).tolist() == [1.0, 4.0, 6.0]
+
+
 def test_typical_error_uses_the_current_versions_mae_once_it_has_enough_rows():
     issue = pd.DataFrame({
         "period_from": IDX[:3], "lead": [13, 30, 60],
