@@ -303,3 +303,14 @@ ours) against actuals later.
   coverage of both inputs is 99.9%.
 - **Track record:** live forecasts issued before 09:39 UTC on 20 Oct trained without full NESO
   history. Start any v4 live-vs-backtest comparison after that time.
+
+## 2026-10-23: past forecasts on the Now chart
+
+- **What:** the Now chart draws our model's forecast for the last 36 h (dashed orange) next to the
+  actuals, from `marts.fct_model_vs_official`, which keeps every past issue.
+- **Which forecast:** each half-hour has several, one per issue (a new one every ~6.5 h). We take
+  the lead band with the lowest live MAE (the Forecast accuracy tab's numbers), newest issue first
+  within it, and fall back to the next-best band where it has none. Picking per half-hour whichever
+  forecast came closest to the actual would be hindsight and make the model look better than it is.
+- **Our model only:** at 0-6 h the forward line shows NESO's numbers, but the past line shows
+  ours, so it is a fair look at the model.
