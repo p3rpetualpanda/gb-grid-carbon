@@ -70,8 +70,8 @@ NESO data only warns; it never stops the hourly run.
 ## The dashboard
 
 [Live on Streamlit](https://gb-grid-carbon-b8k4zy3yzvfzqzxewxzdsk.streamlit.app/). The **Now** tab
-shows the latest intensity, the last 36 h of actuals against what our model forecast for them
-(from its best-scoring lead time), the next 48 h forecast with a band of its typical live error, NESO's
+shows the latest intensity, the last 36 h of actuals against what our model and NESO forecast
+for them (each from its best-scoring lead time), the next 48 h forecast with a band of its typical live error, NESO's
 wind and solar outlook, and what is powering the grid (latest half-hour and the last 7 days).
 Other tabs: a "when should I run it?" planner, a month × hour heatmap, trends since 2017, regions,
 and the live forecast track record against NESO.

@@ -314,3 +314,10 @@ ours) against actuals later.
   forecast came closest to the actual would be hindsight and make the model look better than it is.
 - **Our model only:** at 0-6 h the forward line shows NESO's numbers, but the past line shows
   ours, so it is a fair look at the model.
+
+## 2026-10-23: NESO's past forecast on the Now chart too
+
+- **What:** a dashed green line with NESO's forecast for the last 36 h, picked the same way as ours
+  but ranked by NESO's own live MAE per lead band. Half-hours where an issue has no NESO value are
+  skipped, so the next-best band fills them. Both past lines now sit side by side, so the chart
+  compares the two forecasts directly; the earlier "our model only" choice no longer holds.
