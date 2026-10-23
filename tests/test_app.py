@@ -73,6 +73,18 @@ def test_past_forecast_takes_each_half_hour_from_the_lowest_mae_lead_band():
     assert app.past_forecast(issues, scored.iloc[:0]).tolist() == [1.0, 4.0, 6.0]
 
 
+def test_past_forecast_ranks_neso_by_its_own_mae_and_skips_missing_values():
+    issues = pd.DataFrame({
+        "period_from": [IDX[0], IDX[0], IDX[1], IDX[1]], "lead": [2, 14, 3, 15],
+        "neso_gco2_kwh": [1.0, 2.0, 3.0, None],
+    })  # fmt: skip
+    scored = pd.DataFrame({"band": ["0-6 h", "6-12 h"], "neso_mae": [5.0, 9.0]})
+    out = app.past_forecast(issues, scored, "neso_gco2_kwh", "neso_mae")
+    assert out.tolist() == [1.0, 3.0] and out.index.equals(IDX[:2])
+    scored["neso_mae"] = [9.0, 5.0]  # 6-12 h best, but IDX[1] has no NESO value there
+    assert app.past_forecast(issues, scored, "neso_gco2_kwh", "neso_mae").tolist() == [2.0, 3.0]
+
+
 def test_typical_error_uses_the_current_versions_mae_once_it_has_enough_rows():
     issue = pd.DataFrame({
         "period_from": IDX[:3], "lead": [13, 30, 60],

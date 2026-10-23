@@ -168,12 +168,18 @@ def typical_error(
     return err.set_axis(issue["period_from"]).astype(float)
 
 
-def past_forecast(issues: pd.DataFrame, scored: pd.DataFrame) -> pd.Series:
-    """Per past half-hour: our forecast from the lead band with the lowest live MAE that has one,
-    newest issue first within it. Ranked by band, never by distance to the actual (hindsight)."""
-    rank = _bands(issues).map(scored.set_index("band")["our_mae"])
+def past_forecast(
+    issues: pd.DataFrame,
+    scored: pd.DataFrame,
+    value: str = "model_gco2_kwh",
+    mae: str = "our_mae",
+) -> pd.Series:
+    """Per past half-hour: the `value` forecast from the lead band with the lowest live `mae` that
+    has one, newest issue first within it. Ranked by band, never by distance to the actual."""
+    issues = issues.dropna(subset=[value])
+    rank = _bands(issues).map(scored.set_index("band")[mae])
     best = issues.assign(rank=rank).sort_values(["rank", "lead"]).drop_duplicates("period_from")
-    return best.set_index("period_from")["model_gco2_kwh"].sort_index().astype(float)
+    return best.set_index("period_from")[value].sort_index().astype(float)
 
 
 def mixes_versions(issue: pd.DataFrame, current: pd.DataFrame, min_n: int = MIN_SCORED) -> bool:
@@ -302,14 +308,14 @@ def main() -> None:
                                     - interval 36 hour
                 order by period_from
             """)
-            hindcast = past_forecast(
-                q(f"""
-                    select period_from, lead, model_gco2_kwh from marts.fct_model_vs_official
-                    where period_from between '{past.period_from.min()}'
-                                          and '{past.period_from.max()}'
-                """),
-                scored,
-            )
+            past_issues = q(f"""
+                select period_from, lead, model_gco2_kwh, neso_gco2_kwh
+                from marts.fct_model_vs_official
+                where period_from between '{past.period_from.min()}'
+                                      and '{past.period_from.max()}'
+            """)
+            hindcast = past_forecast(past_issues, scored)
+            neso_hindcast = past_forecast(past_issues, scored, "neso_gco2_kwh", "neso_mae")
             fig = go.Figure()
             if err.notna().any():
                 # Band first so the lines draw on top; tonexty fills between lower and upper.
@@ -323,6 +329,9 @@ def main() -> None:
             fig.add_scatter(x=uk(hindcast.index), y=hindcast,
                             name="Our past forecast",
                             line=dict(color=ORANGE, width=2, dash="dash"))  # fmt: skip
+            fig.add_scatter(x=uk(neso_hindcast.index), y=neso_hindcast,
+                            name="NESO past forecast",
+                            line=dict(color=AQUA, width=2, dash="dash"))  # fmt: skip
             fig.add_scatter(x=uk(forecast.index), y=forecast,
                             name="Our forecast (NESO's for 0-6 h)",
                             line=dict(color=ORANGE, width=2))  # fmt: skip
@@ -333,21 +342,23 @@ def main() -> None:
                 line=dict(color=AQUA, width=2, dash="dot"),
             )
             fig.update_layout(
-                title="Carbon intensity: actual vs our forecast for the last 36 h, "
+                title="Carbon intensity: actual vs our and NESO's forecasts for the last 36 h, "
                 "and the next 48 h (UK time)",
                 yaxis_title="gCO₂/kWh",
                 hovermode="x unified",
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             )
             st.plotly_chart(fig, width="stretch")
-            ranked = scored[scored.band != "All"].sort_values("our_mae")
-            source = "the newest forecast made before it (no live track record yet)"
-            if not ranked.empty:
-                source = (f"the lead time with the lowest live error ({ranked.band.iloc[0]} "
-                          "ahead, falling back to the next best where it has none)")  # fmt: skip
-            st.caption(f"Dashed orange: our model's forecast for each of the last 36 h, from "
-                       f"{source}. The lead is chosen by its average error, not by how close "
-                       "it came to the actual.")  # fmt: skip
+            bands = scored[scored.band != "All"].set_index("band")
+            if bands.empty:
+                source = "the newest forecast made before each half-hour (no live track record yet)"
+            else:
+                source = (f"the lead time with the lowest live error: {bands.our_mae.idxmin()} "
+                          f"ahead for ours, {bands.neso_mae.idxmin()} for NESO's. Where that "
+                          "lead has none, the next best is used")  # fmt: skip
+            st.caption(f"Dashed lines: our (orange) and NESO's (green) forecasts for the last "
+                       f"36 h, each from {source}. The lead is chosen by its average error, not "
+                       "by how close it came to the actual.")  # fmt: skip
             if err.notna().any():
                 mixed = ""
                 if mixes_versions(latest_issue, current):
