@@ -321,3 +321,22 @@ ours) against actuals later.
   but ranked by NESO's own live MAE per lead band. Half-hours where an issue has no NESO value are
   skipped, so the next-best band fills them. Both past lines now sit side by side, so the chart
   compares the two forecasts directly; the earlier "our model only" choice no longer holds.
+
+## 2026-10-26: first live check of v4, and the 22 Oct miss
+
+**v4 against NESO, live.** `analysis/live_bias.py` on MotherDuck: 103 forecasts, 8,338 scored
+half-hours over target days 19–26 Oct. Our MAE is 17.0, NESO's 21.7; bias +3.8 vs NESO's −14.6.
+The backtest's worry (bias up from 1.3 to 2.0, long leads gaining less) half shows live: the
+24–48 h band has our highest MAE (19.1 vs NESO's 22.2) and the highest bias (+5.2), but daily
+bias swings both ways (−12 to +26), so it is not drift. v3 and v4 never ran in the same issue,
+so there is no head-to-head; on the shared target days (19–21 Oct) both beat NESO by the same 3.5.
+Too few days for the bootstrap interval (needs 45), so the README numbers are interim.
+
+**22 Oct (our MAE 28.1, bias +25.9) was a weather-forecast miss, not a model bug.** The worst
+forecasts were issued 20 Oct 09:00–17:00 at 36–48 h leads (bias +45 to +60). The 20 Oct 13:00
+weather snapshot had mean 100 m wind at the points we also observe falling to 17–24 km/h over
+00:00–15:00 UTC on 22 Oct; observed was 24–32. A calmer forecast means more gas, so we forecast
+up to ~145 gCO₂/kWh for a morning that came in at ~110. The 21 Oct snapshots had the wind right
+(within ~3 km/h) and our bias for those issues fell to about +12 to +28. Both we and NESO also
+missed the late-evening drop (22:00, both over by ~50) as wind returned faster than forecast.
+Nothing to fix in the model; it is the cost of 2-day-ahead wind forecasts.
