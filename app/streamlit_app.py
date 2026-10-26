@@ -63,7 +63,7 @@ def typical_day(typical: pd.DataFrame) -> pd.DataFrame:
     return (sums["gn"] / sums["n"]).unstack().reindex(columns=range(48)).dropna()
 
 
-MAX_TASK_H = 8  # the planner's longest task
+MAX_TASK_H = 8  # the longest task length offered
 
 
 def upcoming(
@@ -107,7 +107,7 @@ def slot_label(slot: int) -> str:
 PLAIN_BANDS = {"0-6 h": "Next 6 hours", "6-12 h": "6–12 hours ahead",
                "12-24 h": "12–24 hours ahead", "24-48 h": "1–2 days ahead",
                "All": "All (next 48 hours)"}  # fmt: skip
-NESO_LEADS = 12  # NESO beats our model at 0-6 h (live and backtest), so trust it there
+NESO_LEADS = 6  # live v4: NESO beats us for the first 3 h, we beat it at 3-6 h (26 Oct)
 
 
 def rows_or_empty(run, sql: str) -> pd.DataFrame:
@@ -124,7 +124,7 @@ def _shows_neso(issue: pd.DataFrame) -> pd.Series:
 
 
 def best_forecast(issue: pd.DataFrame) -> pd.Series:
-    """Per half-hour: NESO's forecast for the first 6 h (when it has one), ours after that."""
+    """Per half-hour: NESO's forecast for the first 3 h (when it has one), ours after that."""
     blended = issue["neso_gco2_kwh"].where(_shows_neso(issue), issue["model_gco2_kwh"])
     return blended.set_axis(issue["period_from"]).astype(float)
 
@@ -273,10 +273,9 @@ def main() -> None:
     """)
     err = typical_error(latest_issue, scored, current)
 
-    now_tab, planner_tab, greenest_tab, trends_tab, regions_tab, accuracy_tab, about_tab = st.tabs(
+    now_tab, greenest_tab, trends_tab, regions_tab, accuracy_tab, about_tab = st.tabs(
         [
             "Now",
-            "Planner",
             "When is it greenest?",
             "Trends",
             "Regions",
@@ -333,7 +332,7 @@ def main() -> None:
                             name="NESO past forecast",
                             line=dict(color=AQUA, width=2, dash="dash"))  # fmt: skip
             fig.add_scatter(x=uk(forecast.index), y=forecast,
-                            name="Our forecast (NESO's for 0-6 h)",
+                            name="Our forecast (NESO's for 0-3 h)",
                             line=dict(color=ORANGE, width=2))  # fmt: skip
             fig.add_scatter(
                 x=uk(latest_issue.period_from),
@@ -435,23 +434,6 @@ def main() -> None:
             st.caption("Other = biomass, hydro, coal and other sources. Shares of GB generation "
                        "(Carbon Intensity API).")  # fmt: skip
 
-    with planner_tab:
-        st.subheader("When should I run it?")
-        hours = st.slider("How long does it run? (hours)", 0.5, float(MAX_TASK_H), 3.0, 0.5)
-        if forecast.empty:
-            st.info("No forecast yet: it appears after the next pipeline run.")
-        else:
-            start, mean = greenest_window(advice, hours)
-            now_mean = advice.iloc[: max(1, round(hours * 2))].mean()
-            st.success(
-                f"Start at **{hhmm(start)}** for the cleanest {hours:g} h in the {span}: "
-                f"about **{mean:.0f} gCO₂/kWh**, vs {now_mean:.0f} if you start now "
-                f"(**{1 - mean / now_mean:.0%} less CO₂**)."
-            )
-            st.caption("Based on our latest 48 h forecast (NESO's for the first 6 h). "
-                       "7 kWh of EV charging at the cleanest time "
-                       f"emits about {7 * mean / 1000:.1f} kg CO₂.")  # fmt: skip
-
     with greenest_tab:
         typical = q("""
             select month, halfhour_slot, is_weekend, avg(actual_gco2_kwh) as g,
@@ -482,6 +464,17 @@ def main() -> None:
                 format_func=lambda h: f"{h:g} h",
             )
             m = months.index(month) + 1
+            if not forecast.empty:
+                start, mean = greenest_window(advice, task_h)
+                now_mean = advice.iloc[: max(1, round(task_h * 2))].mean()
+                st.success(
+                    f"From the live forecast: start at **{hhmm(start)}** for the cleanest "
+                    f"{task_h:g} h in the {span}: about **{mean:.0f} gCO₂/kWh**, "
+                    f"vs {now_mean:.0f} if you start now (**{1 - mean / now_mean:.0%} less CO₂**)."
+                )
+                st.caption("Based on our latest 48 h forecast (NESO's for the first 3 h). "
+                           "7 kWh of EV charging at the cleanest time "
+                           f"emits about {7 * mean / 1000:.1f} kg CO₂.")  # fmt: skip
 
             def window(day: pd.Series, best: bool) -> tuple[str, float]:
                 means = day_windows(day, task_h)
@@ -569,7 +562,7 @@ def main() -> None:
             st.caption(
                 "Averages of actual intensity over the last 12 months, UK time. Midday is "
                 "cleanest from spring to autumn (solar); early evening is dirtiest all year. "
-                "For the next 48 h, see the Planner tab."
+                "The green box at the top uses the live 48 h forecast instead."
             )
 
     with trends_tab:

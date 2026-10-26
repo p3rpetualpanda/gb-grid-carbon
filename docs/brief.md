@@ -27,7 +27,7 @@ forecast needed to do it automatically.
 
 | # | Recommendation | Expected impact | Effort |
 |---|---|---|---|
-| 1 | **Make "cleanest window" the default overnight schedule**, chosen daily from the 48 h forecast, still finishing by the driver's departure time. | ~29% lower charging emissions; ~113 kg CO₂/car/year; ~113,000 t/year per million cars | Low: forecast and window-finder already exist (dashboard "Planner") |
+| 1 | **Make "cleanest window" the default overnight schedule**, chosen daily from the 48 h forecast, still finishing by the driver's departure time. | ~29% lower charging emissions; ~113 kg CO₂/car/year; ~113,000 t/year per million cars | Low: forecast and window-finder already exist (dashboard "When is it greenest?" tab) |
 | 2 | **Offer a "solar window" for daytime-parked cars, March–September** (workplace or home-working drivers): charge around midday. | Uses the cleanest hours of the year; reduces evening-peak demand | Medium: needs daytime plug-in behaviour data |
 | 3 | **Show drivers the saving in their own terms** ("tonight's smart charge avoided 0.3 kg CO₂"), using the dashboard's numbers. | Retention and opt-in; makes the green claim verifiable | Low |
 
