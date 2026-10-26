@@ -82,8 +82,9 @@ NESO data only warns; it never stops the hourly run.
 shows the latest intensity, the last 36 h of actuals against what our model and NESO forecast
 for them (each from its best-scoring lead time), the next 48 h forecast with a band of its typical live error, NESO's
 wind and solar outlook, and what is powering the grid (latest half-hour and the last 7 days).
-Other tabs: a "when should I run it?" planner, a month × hour heatmap, trends since 2017, regions,
-and the live forecast track record against NESO.
+Other tabs: "when is it greenest?" (the cleanest start time for a task of any length from the
+live forecast, plus a month × hour heatmap), trends since 2017, regions, and the live forecast
+track record against NESO.
 
 ## Engineering highlights
 

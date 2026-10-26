@@ -340,3 +340,20 @@ up to ~145 gCO₂/kWh for a morning that came in at ~110. The 21 Oct snapshots h
 (within ~3 km/h) and our bias for those issues fell to about +12 to +28. Both we and NESO also
 missed the late-evening drop (22:00, both over by ~50) as wind returned faster than forecast.
 Nothing to fix in the model; it is the cost of 2-day-ahead wind forecasts.
+
+## 2026-10-26: NESO's forecast on the Now chart for 3 h, not 6
+
+- **What:** the forward line now shows NESO's forecast only for the first 3 h (`NESO_LEADS` 12 → 6
+  half-hours), ours after that; legend and planner caption say so.
+- **Why:** the 6 h hand-over came from v2/v3, when NESO beat us across 0-6 h. Live v4 (19-26 Oct,
+  ~200 scored half-hours per hour of lead) splits that band: NESO is better for the first 3 h
+  (MAE 10.2-15.3 vs our 14.1-16.2), we are better at 3-6 h (14.7-15.4 vs NESO's 16.8-19.8).
+- **Caveat:** 8 days of data. Re-check the per-hour split on 8 Nov with the live write-up.
+
+## 2026-10-26: Planner tab folded into "When is it greenest?"
+
+- **What:** the Planner tab is gone. Its one answer ("start at X for the cleanest N h, vs starting
+  now") now sits at the top of "When is it greenest?", driven by that tab's task-length slider.
+- **Why:** two tabs asked the same question (when should I run a task of this length?) with two
+  sliders; one answered from the live forecast, the other from 12-month averages. One tab with one
+  slider shows both answers side by side.
