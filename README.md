@@ -55,6 +55,15 @@ actual" at every lead time. NESO's published forecast scores <!-- bt:neso_mae --
 forecast-not-observed weather, train-before-test) are enforced by tests. Details:
 [`docs/backtest.md`](docs/backtest.md).
 
+**Live so far (`lgbm-direct-v4`, 19–26 Oct 2026).** Over 103 forecasts and 8,338 scored
+half-hours, our MAE is **17.0 gCO₂/kWh against NESO's 21.7**. We are ahead at every lead band,
+by most at 12–24 h (15.2 vs 24.2) and least at 0–6 h (15.3 vs 16.4). Our bias is +3.8 (a little
+high, and not drifting); NESO's is −14.6. Picking the greenest 3 h window from each fully scored
+forecast, ours lands 3.7 gCO₂/kWh above the true best on average, NESO's 12.5. Caveats: 8 days is
+too few for a confidence interval (`analysis/live_bias.py` needs 45), and one day can swing it.
+22 Oct was our worst day (MAE 28.1) because the weather forecast issued two days earlier had the
+wind dropping too soon; later forecasts got the wind right and our error fell with them.
+
 **NESO forecasts as inputs.** NESO's embedded wind/solar forecasts (always the vintage published
 before each forecast) cut the backtest MAE from <!-- bt:previous_model_mae -->27.0<!-- /bt --> to <!-- bt:v3_model_mae -->20.9<!-- /bt -->. NESO's transmission wind
 forecast is left out: its archive only covers the day each forecast is published, so most 48 h
