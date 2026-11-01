@@ -120,6 +120,8 @@ def upsert(
 ) -> int:
     """Replace rows sharing a natural key with the batch. Returns rows written.
 
+    A NULL in the batch never replaces a stored value (a source re-serving a period with a
+    variable missing must not erase what we already hold); new non-NULL values do replace.
     Rows identical to what is stored are skipped, so `_ingested_at`/`_run_id` record when the
     current values first arrived (e.g. when an actual was published), not the last re-fetch.
     """
@@ -130,17 +132,24 @@ def upsert(
         log.info("upsert %s: empty batch, nothing to do", table)
         return 0
     batch = df.drop_duplicates(subset=key_cols, keep="last")
+    value_cols = [c for c in batch.columns if c not in key_cols]
     match = " AND ".join(f"t.{c} = b.{c}" for c in key_cols)
-    same = " AND ".join(
-        f"t.{c} IS NOT DISTINCT FROM b.{c}" for c in batch.columns if c not in key_cols
+    select = ", ".join(
+        f"b.{c}" if c in key_cols else f"coalesce(b.{c}, t.{c}) AS {c}" for c in batch.columns
     )
+    same = " AND ".join(f"t.{c} IS NOT DISTINCT FROM b.{c}" for c in value_cols)
     con.register("_batch", batch)
     try:
         con.begin()
         con.execute(
-            "CREATE OR REPLACE TEMP TABLE _changed AS SELECT * FROM _batch AS b WHERE NOT EXISTS "
+            f"CREATE OR REPLACE TEMP TABLE _merged AS SELECT {select} FROM _batch AS b "
+            f"LEFT JOIN {table} AS t ON {match}"
+        )
+        con.execute(
+            "CREATE OR REPLACE TEMP TABLE _changed AS SELECT * FROM _merged AS b WHERE NOT EXISTS "
             f"(SELECT 1 FROM {table} AS t WHERE {match} AND {same or 'true'})"
         )
+        con.execute("DROP TABLE _merged")
         con.execute(f"DELETE FROM {table} AS t USING _changed AS b WHERE {match}")
         con.execute(
             f"INSERT INTO {table} BY NAME SELECT *, ? AS _ingested_at, ? AS _run_id FROM _changed",

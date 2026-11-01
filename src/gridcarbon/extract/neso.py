@@ -89,6 +89,8 @@ def _with_vintages(client: ApiClient, ids: list[str], ts_col: str) -> list[str]:
 def _wind_resources(client: ApiClient) -> list[str]:
     # National forecasts only: the BMU (per wind farm) files share the dataset.
     ids = [r["id"] for r in _resources(client, WIND_PACKAGE) if "bmu" not in r["name"].lower()]
+    if not ids:
+        raise ValueError("no national NESO wind forecast resource found")
     return _with_vintages(client, ids, "Forecast_Timestamp")
 
 
