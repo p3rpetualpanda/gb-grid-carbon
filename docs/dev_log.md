@@ -437,3 +437,10 @@ leakage; these are the loader fixes. Each has a test that failed first.
 - **Not changed:** optional-dataset failures still end in a green run. That is deliberate
   (README, `Dataset.optional`, a test, and the dashboard reads `status='success'`); NESO freshness
   stays warn-only because the forecast falls back without NESO and must still publish.
+
+## 1 Nov 2026: MotherDuck token scoped to the steps that connect
+
+`MOTHERDUCK_TOKEN` was a job-level env var, so `pip install` and the third-party actions saw it
+too. It is now set per step on the six that connect to MotherDuck (incremental load, source
+freshness, dbt build, predict, score, docs generate). `DB_TARGET` and `DBT_TARGET` stay job-level.
+No offline test covers a workflow; checked by a manual `workflow_dispatch` run after merge.

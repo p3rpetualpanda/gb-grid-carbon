@@ -22,7 +22,6 @@ jobs:
     env:
       DB_TARGET: motherduck
       DBT_TARGET: prod
-      MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -36,25 +35,37 @@ jobs:
         run: pip install -e ".[dbt,ml]"
 
       - name: Extract + load
+        env:
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
         run: gridcarbon incremental
 
       - name: Source freshness
         working-directory: dbt
+        env:
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
         run: dbt source freshness --profiles-dir .
 
       - name: Transform + test
         working-directory: dbt
+        env:
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
         run: dbt build --profiles-dir .
 
       - name: Forecast next 48h
+        env:
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
         run: gridcarbon predict
 
       - name: Score forecasts (model vs NESO)
         working-directory: dbt
+        env:
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
         run: dbt run --profiles-dir . --select fct_model_vs_official
 
       - name: Build docs site
         working-directory: dbt
+        env:
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
         run: |
           dbt docs generate --profiles-dir .
           mkdir -p ../site && cp target/index.html target/manifest.json target/catalog.json ../site/
