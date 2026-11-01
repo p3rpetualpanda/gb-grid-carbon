@@ -690,8 +690,11 @@ def main() -> None:
             c3.metric("Half-hours where ours was closer", f"{overall.we_closer:.0f}%")
             version, _ = model_label(issue_meta.v)
             share = current["n"].sum() / overall.n if not current.empty else 0
-            st.caption(f"Latest model: {version}. It has scored {share:.0%} of these "
-                       f"{overall.n:,.0f} half-hours; the rest are earlier versions.")  # fmt: skip
+            scored_by = (f"has scored {current['n'].sum():,.0f} ({share:.0%}) of these "
+                         f"{overall.n:,.0f} half-hours; the rest are earlier versions"
+                         if share else f"has no scored half-hours yet; all {overall.n:,.0f} "
+                         "are from earlier versions")  # fmt: skip
+            st.caption(f"Latest model: {version}. It {scored_by}.")
             st.markdown(
                 f"Put simply: when we forecast, say, 150 gCO₂/kWh, the real figure usually lands "
                 f"within about **{overall.our_mae:.0f}** of that, which is roughly "
