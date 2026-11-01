@@ -66,7 +66,10 @@ an outage.
 **What happens if the API is down for a day?**
 Retries with backoff for transient errors; if the run still fails it's logged in
 `meta.pipeline_runs` and GitHub emails me. The next run's look-back window fills the gap, and dbt
-source freshness fails the build after 24 h without new data.
+source freshness fails the build after 24 h without new data. The weak spot is the trigger: since
+1 Nov only cron-job.org starts the pipeline (every 3 h, to stay inside MotherDuck's free tier), so
+if it stops there is no failed run to email me. The dashboard's "last refreshed" line is what
+would show it.
 
 **How did you avoid leakage in the forecast?**
 Features only use data known at issue time: actuals stop 1 h before (publication lag), "same
@@ -90,3 +93,20 @@ that cycles through all 48 half-hours) and under-use of the latest actual at ver
 Incremental dbt models, an orchestrator with retries and alerting (Dagster/Airflow), a cloud
 warehouse with separate dev/prod environments, a stored and versioned model with drift
 monitoring, and NESO's own forecast as a model feature once enough snapshots have accumulated.
+
+**When was your forecast wrong, and why?**
+Twice in the first 13 live days, both weather misses. On 22 Oct the 2-day-ahead wind forecast had
+the wind dropping too soon, so we over-forecast (bias +26). On 28 Oct wind really did collapse
+(41 to 16 km/h over three days, intensity 80 to 209) and the forecast had it too windy, so we
+under-forecast (bias -21); NESO was off by more. Details in dev_log (26 Oct and 1 Nov). I can't
+fix a wrong weather forecast; I can show the error is where it should be, and that an
+error-feedback input didn't help in testing (error correlation 0.04-0.13).
+
+**What would break at 100x the data?**
+Full-refresh dbt marts and retraining on every run. Both are fine at 9M rows (a run takes about
+3 minutes). At 100x I'd make the marts incremental by day and retrain on a schedule, not every
+run, saving each model version so a bad retrain can be traced and rolled back.
+
+**Why no regional savings estimate?**
+The API's regional data is forecast-only, with no regional actuals, so any saving would be scored
+against a forecast, not what happened. The dashboard labels regional figures as forecasts.
