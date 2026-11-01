@@ -145,6 +145,8 @@ def upsert(
             f"CREATE OR REPLACE TEMP TABLE _merged AS SELECT {select} FROM _batch AS b "
             f"LEFT JOIN {table} AS t ON {match}"
         )
+        if con.execute("SELECT count(*) FROM _merged").fetchone()[0] != len(batch):
+            raise ValueError(f"{table} holds duplicate rows for a natural key {key_cols}")
         con.execute(
             "CREATE OR REPLACE TEMP TABLE _changed AS SELECT * FROM _merged AS b WHERE NOT EXISTS "
             f"(SELECT 1 FROM {table} AS t WHERE {match} AND {same or 'true'})"
