@@ -42,3 +42,6 @@ next-steps.md
 
 # graphify knowledge graph: generated locally, holds machine paths
 graphify-out/
+
+# uv lockfile: the project installs from pyproject.toml, not uv
+uv.lock
