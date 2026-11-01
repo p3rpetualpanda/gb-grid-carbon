@@ -277,12 +277,27 @@ def test_predict_live_falls_back_when_a_wind_point_is_missing(monkeypatch, caplo
     assert "wind_thames_offshore" in caplog.text
 
 
-def test_predict_live_does_not_average_over_a_missing_weather_point(monkeypatch, caplog):
+def test_predict_live_refuses_to_average_over_a_missing_weather_point(monkeypatch):
     # With london absent the solar and temperature means would silently shift to other points.
     con, issue, seen = live_setup(monkeypatch, covered=fc.HORIZON, snapshot_skips="london")
-    fc.predict_live(con, issue.to_pydatetime())
-    assert seen["X"]["solar_radiation"].isna().all()
-    assert "base inputs missing" in caplog.text
+    with pytest.raises(RuntimeError, match="weather inputs incomplete"):
+        fc.predict_live(con, issue.to_pydatetime())
+
+
+def test_weather_mean_ignores_a_point_present_but_null(monkeypatch):
+    import duckdb
+
+    con = duckdb.connect()
+    con.execute(
+        "create table w (time timestamptz, point_id varchar, wind_speed_100m double, "
+        "shortwave_radiation double, temperature_2m double)"
+    )
+    con.execute(
+        "insert into w values ('2026-01-01', 'london', 1.0, NULL, 5.0), "
+        "('2026-01-01', 'south_england_solar', 1.0, 100.0, 5.0)"
+    )
+    sql = fc.GB_WEATHER_SQL.format(table="w", where="")
+    assert con.sql(sql).df()["solar_radiation"].isna().all()  # london's value is NULL
 
 
 def test_predict_live_falls_back_without_a_full_neso_vintage(monkeypatch):

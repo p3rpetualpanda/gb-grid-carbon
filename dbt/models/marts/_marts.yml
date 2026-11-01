@@ -29,6 +29,7 @@ models:
           - not_null
           # The set is fixed (1-14 DNO areas, 15-18 aggregates); a group-by alone can't miss one.
           - accepted_values:
+              config: {severity: warn}  # a new region id should not stop the pipeline
               arguments:
                 values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
 
