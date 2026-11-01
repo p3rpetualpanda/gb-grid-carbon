@@ -13,9 +13,10 @@ from gridcarbon.extract import neso
 
 def package(*resources: tuple[str, str, bool]) -> dict:
     return {
+        "success": True,
         "result": {
             "resources": [{"id": i, "name": n, "datastore_active": a} for i, n, a in resources]
-        }
+        },
     }
 
 
@@ -65,10 +66,18 @@ FIELDS = {
 def add_fields(fields=FIELDS):
     def reply(request):
         rid = parse_qs(urlparse(request.url).query)["resource_id"][0]
-        body = {"result": {"fields": [{"id": f} for f in ["_id", *fields[rid]]]}}
+        body = {"success": True, "result": {"fields": [{"id": f} for f in ["_id", *fields[rid]]]}}
         return 200, {}, json.dumps(body)
 
     responses.add_callback(responses.GET, f"{neso.API_URL}/datastore_search", callback=reply)
+
+
+def add_sql(*pages):
+    """Queue SQL pages; an empty page last ends the pagination (responses repeats the last)."""
+    for page in (*pages, []):
+        responses.add(
+            responses.GET, f"{neso.API_URL}/datastore_search_sql", json=sql_response(page)
+        )
 
 
 def sql_queries() -> list[str]:
@@ -160,10 +169,10 @@ def test_fetch_wind_queries_only_the_archive(client):
     responses.add(responses.GET, f"{neso.API_URL}/package_show", json=WIND_PACKAGE)
     add_fields()
     rec = wind_record("2024-01-01T09:00:00Z", "2024-01-02T00:00:00", 5000)
-    responses.add(responses.GET, f"{neso.API_URL}/datastore_search_sql", json=sql_response([rec]))
+    add_sql([rec])
     df = neso.fetch_wind_forecast(client, utc(2024, 1, 1), utc(2024, 1, 2))
     queried = sql_queries()
-    assert len(queried) == 1
+    assert len(queried) == 2  # the data page, then the empty page that ends the loop
     assert '"wind-hist"' in queried[0]
     assert "\"Forecast_Timestamp\" >= '2024-01-01T00:00:00'" in queried[0]
     assert "interval '4 days'" in queried[0]
@@ -191,7 +200,7 @@ def test_fetch_fails_when_no_resource_has_vintages(client):
 def test_fetch_embedded_queries_only_overlapping_years(client):
     responses.add(responses.GET, f"{neso.API_URL}/package_show", json=EMBEDDED_PACKAGE)
     add_fields()
-    responses.add(responses.GET, f"{neso.API_URL}/datastore_search_sql", json=sql_response([]))
+    add_sql()
     neso.fetch_embedded_forecast(client, utc(2024, 6, 1), utc(2024, 6, 4))
     sqls = " ".join(sql_queries())
     assert "emb-2024" in sqls
@@ -200,16 +209,36 @@ def test_fetch_embedded_queries_only_overlapping_years(client):
 
 
 @responses.activate
-def test_sql_paginates_until_a_short_page(client, monkeypatch):
-    monkeypatch.setattr(neso, "PAGE_SIZE", 2)
+def test_sql_paginates_until_an_empty_page(client, monkeypatch):
+    # A page shorter than PAGE_SIZE is not the end: CKAN may cap rows below our page size.
+    monkeypatch.setattr(neso, "PAGE_SIZE", 3)
     rec = wind_record("2024-01-01T09:00:00Z", "2024-01-02T00:00:00", 1)
-    for page in ([rec, rec], [rec, rec], [rec]):
-        responses.add(
-            responses.GET, f"{neso.API_URL}/datastore_search_sql", json=sql_response(page)
-        )
+    add_sql([rec, rec], [rec, rec], [rec])
     rows = neso._sql_rows(client, "r", "Forecast_Timestamp", utc(2024, 1, 1), utc(2024, 1, 2))
     assert len(rows) == 5
     assert "OFFSET 4" in responses.calls[2].request.url.replace("+", " ").replace("%20", " ")
+
+
+@responses.activate
+def test_a_200_response_with_success_false_raises(client):
+    responses.add(
+        responses.GET,
+        f"{neso.API_URL}/package_show",
+        json={"success": False, "error": {"message": "boom"}},
+    )
+    with pytest.raises(ValueError, match="success"):
+        neso.fetch_wind_forecast(client, utc(2024, 1, 1), utc(2024, 1, 2))
+
+
+@responses.activate
+def test_fetch_wind_14d_fails_if_the_page_is_full(client, monkeypatch):
+    monkeypatch.setattr(neso, "PAGE_SIZE", 1)
+    responses.add(responses.GET, f"{neso.API_URL}/package_show", json=package(("w14", "14d", True)))
+    rec = {"ForecastDateTime": "2026-10-18T16:30:00", "Datetime": "2026-10-18T17:00:00",
+           "Wind_Forecast": 9000, "Capacity": 25502}  # fmt: skip
+    add_sql([rec])
+    with pytest.raises(ValueError, match="truncated"):
+        neso.fetch_wind_14d_forecast(client)
 
 
 def test_parse_wind_14d_recorded_response_drops_past_targets(fixture_json):
@@ -231,7 +260,7 @@ def test_fetch_wind_14d_reads_the_national_file_only(client):
     responses.add(responses.GET, f"{neso.API_URL}/package_show", json=pkg)
     rec = {"ForecastDateTime": "2026-10-18T16:30:00", "Datetime": "2026-10-18T17:00:00",
            "Wind_Forecast": 9000, "Capacity": 25502}  # fmt: skip
-    responses.add(responses.GET, f"{neso.API_URL}/datastore_search_sql", json=sql_response([rec]))
+    add_sql([rec])
     df = neso.fetch_wind_14d_forecast(client)
     queried = sql_queries()
     assert len(queried) == 1 and '"w14"' in queried[0]
@@ -251,6 +280,6 @@ def test_fetch_embedded_fails_when_a_year_has_no_archive(client):
     # vintages would leave a silent gap.
     responses.add(responses.GET, f"{neso.API_URL}/package_show", json=EMBEDDED_PACKAGE)
     add_fields()
-    responses.add(responses.GET, f"{neso.API_URL}/datastore_search_sql", json=sql_response([]))
+    add_sql()
     with pytest.raises(ValueError, match="2025"):
         neso.fetch_embedded_forecast(client, utc(2024, 12, 30), utc(2025, 1, 2))
