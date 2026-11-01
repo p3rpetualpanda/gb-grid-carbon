@@ -48,6 +48,9 @@ WIND_POINT_FEATURES = [f"wind_{p}" for p in WIND_POINTS]
 V3_FEATURES = BASE_FEATURES + ["neso_embedded_wind_mw", "neso_embedded_solar_mw"]
 FEATURES = V3_FEATURES + WIND_POINT_FEATURES
 NESO_LAG = pd.Timedelta(minutes=30)  # allowance for publication after Forecast_Timestamp
+# Live only: NESO issues hourly (99% of gaps <= 1.03 h, 1 Nov); a vintage older than this means a
+# stall. Training keeps any age, since its history has gaps (longest 93 h).
+NESO_MAX_AGE = pd.Timedelta(hours=6)
 NESO_SQL = {
     "raw.neso_wind_forecast": "forecast_mw as neso_wind_mw",
     "raw.neso_embedded_forecast": "wind_mw as neso_embedded_wind_mw, "
@@ -56,20 +59,26 @@ NESO_SQL = {
 log = logging.getLogger(__name__)
 HOLIDAYS_CSV = Path(__file__).resolve().parents[2] / "dbt" / "seeds" / "uk_bank_holidays.csv"
 
+
 # The three averages use the same point roles as dbt/models/intermediate/int_weather_gb.sql;
 # then one wind-speed column per WIND_POINTS entry (WIND_POINT_FEATURES).
+def _mean_of(col: str, points: tuple[str, ...]) -> str:
+    """Average of `col` over `points`; NaN, not a shifted average, if any point is absent."""
+    ids = ", ".join(f"'{p}'" for p in points)
+    return (
+        f"case when count(*) filter (where point_id in ({ids})) = {len(points)} "
+        f"then avg({col}) filter (where point_id in ({ids})) end"
+    )
+
+
+_WIND_PTS = ("north_scotland", "south_scotland", "north_sea_offshore")
+_SOLAR_PTS = ("london", "south_england_solar")
+_TEMP_PTS = ("manchester", "birmingham", "london")
 GB_WEATHER_SQL = (
-    """
-    select time as hour_utc,
-        avg(wind_speed_100m) filter (
-            where point_id in ('north_scotland', 'south_scotland', 'north_sea_offshore')
-        ) as wind_speed,
-        avg(shortwave_radiation) filter (
-            where point_id in ('london', 'south_england_solar')
-        ) as solar_radiation,
-        avg(temperature_2m) filter (
-            where point_id in ('manchester', 'birmingham', 'london')
-        ) as temperature"""
+    "\n    select time as hour_utc,\n"
+    f"        {_mean_of('wind_speed_100m', _WIND_PTS)} as wind_speed,\n"
+    f"        {_mean_of('shortwave_radiation', _SOLAR_PTS)} as solar_radiation,\n"
+    f"        {_mean_of('temperature_2m', _TEMP_PTS)} as temperature"
     + "".join(
         f",\n        max(wind_speed_100m) filter (where point_id = '{p}') as wind_{p}"
         for p in WIND_POINTS
@@ -108,7 +117,9 @@ def load_neso_forecasts(con) -> list[pd.DataFrame]:
     ]
 
 
-def latest_vintage(issued: pd.DatetimeIndex, target, vintages: pd.DataFrame) -> pd.DataFrame:
+def latest_vintage(
+    issued: pd.DatetimeIndex, target, vintages: pd.DataFrame, max_age=None
+) -> pd.DataFrame:
     """For each (issue, target) row: the newest vintage's values made by issue - NESO_LAG."""
     cols = [c for c in vintages.columns if c not in ("issued_at", "period_from")]
     left = pd.DataFrame(
@@ -127,6 +138,7 @@ def latest_vintage(issued: pd.DatetimeIndex, target, vintages: pd.DataFrame) -> 
         on="issued_at",
         by="period_from",
         direction="backward",
+        tolerance=max_age,  # None: any age; older than max_age gives NaN
     )
     return merged.sort_values("_row")[cols].reset_index(drop=True)
 
@@ -141,6 +153,7 @@ def features(
     issues: pd.DatetimeIndex,
     hols: set,
     neso: list[pd.DataFrame] | None = None,
+    neso_max_age=None,
 ):
     """One row per (issue, lead). Only data with period_from < issue - ACTUAL_LAG is used, and
     only NESO forecast vintages made by issue - NESO_LAG (NESO_FEATURES are NaN without `neso`).
@@ -179,7 +192,7 @@ def features(
     for col in NESO_FEATURES:
         rows[col] = np.nan
     for vintages in neso or []:
-        found = latest_vintage(issued, target, vintages)
+        found = latest_vintage(issued, target, vintages, neso_max_age)
         rows[found.columns] = found.to_numpy(dtype=float)
     return rows
 
@@ -262,7 +275,9 @@ def predict_live(con, now: datetime) -> pd.DataFrame:
         .df()
         .set_index("hour_utc")
     )
-    rows = features(grid, wx_live.combine_first(wx_hist), pd.DatetimeIndex([issue]), hols, neso)
+    rows = features(
+        grid, wx_live.combine_first(wx_hist), pd.DatetimeIndex([issue]), hols, neso, NESO_MAX_AGE
+    )
     # The base inputs are never allowed to fall back, so a gap in them (stalled actuals, missing
     # weather) must at least show in the log.
     base_nan = rows[BASE_FEATURES].isna().sum()

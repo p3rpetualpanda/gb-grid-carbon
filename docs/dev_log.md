@@ -508,3 +508,19 @@ and the baselines unchanged). README, showcase and the dashboard caption updated
   emails the repo owner on a failed scheduled run. It reads run metadata only: no secrets, no
   MotherDuck. Limit: GitHub's schedule is best-effort and paused after 60 days with no commit, so
   cron-job.org failure notifications are a worthwhile second alert.
+
+## 1 Nov 2026: stale NESO vintage and missing weather points now fall back
+
+- **Stale NESO guard (live only).** `latest_vintage` took the newest vintage of any age, so a NESO
+  stall of up to a day passed the NaN-only fallback and fed a stale embedded wind forecast to the
+  model. `predict_live` now ignores a vintage older than `NESO_MAX_AGE` (6 h); the targets go NaN
+  and the existing fallback to `lgbm-direct-v4.1-fallback` fires. Chosen from MotherDuck on
+  1 Nov: 41,845 vintages, hourly, 99% of gaps at most 1.03 h (the longest, 93 h, is a 2022-26
+  archive hole). Training and the backtest keep any age, so no backtest number moves.
+- **Not measured: `NESO_LAG`.** The shortest gap between a vintage's `issued_at` and its first
+  ingest is 36 min across 133 incremental vintages, but runs are 3 h apart, so this is only a loose
+  bound. The real publication delay stays unmeasured; the 30 min assumption is unchanged.
+- **Missing solar or temperature point.** The live weather SQL averaged whichever points existed,
+  so a snapshot missing `london` quietly shifted the solar and temperature means. Each mean is now
+  NaN unless every point is present, which the base-input warning reports. The dbt weather model
+  and training keep their averages; they read observed data, not snapshots.

@@ -198,7 +198,9 @@ def test_backtest_scores_every_variant_on_the_same_rows(monkeypatch):
     assert far["model_neso"].round(2).eq(len(fc.BASE_FEATURES) + 3).all()
 
 
-def live_setup(monkeypatch, covered: int, snapshot_skips: str | None = None):
+def live_setup(
+    monkeypatch, covered: int, snapshot_skips: str | None = None, vintage_age_h: float = 1
+):
     """In-memory warehouse issuing at day 10, with an embedded vintage covering `covered` targets
     and a weather snapshot for the next 50 h at every point except `snapshot_skips`.
     Returns (con, issue, dict that receives the feature frame the model predicts on)."""
@@ -229,7 +231,7 @@ def live_setup(monkeypatch, covered: int, snapshot_skips: str | None = None):
     targets = pd.date_range(issue, periods=covered, freq="30min")
     embedded = pd.DataFrame(
         {
-            "issued_at": issue - pd.Timedelta(hours=1),
+            "issued_at": issue - pd.Timedelta(hours=vintage_age_h),
             "period_from": targets,
             "neso_embedded_wind_mw": 1500.0,
             "neso_embedded_solar_mw": 200.0,
@@ -275,6 +277,14 @@ def test_predict_live_falls_back_when_a_wind_point_is_missing(monkeypatch, caplo
     assert "wind_thames_offshore" in caplog.text
 
 
+def test_predict_live_does_not_average_over_a_missing_weather_point(monkeypatch, caplog):
+    # With london absent the solar and temperature means would silently shift to other points.
+    con, issue, seen = live_setup(monkeypatch, covered=fc.HORIZON, snapshot_skips="london")
+    fc.predict_live(con, issue.to_pydatetime())
+    assert seen["X"]["solar_radiation"].isna().all()
+    assert "base inputs missing" in caplog.text
+
+
 def test_predict_live_falls_back_without_a_full_neso_vintage(monkeypatch):
     # A stalled NESO feed leaves later targets uncovered: use the model without NESO inputs and
     # say so in model_version, rather than publish a v3 forecast on inputs it never trained on.
@@ -283,6 +293,21 @@ def test_predict_live_falls_back_without_a_full_neso_vintage(monkeypatch):
     assert list(seen["X"].columns) == fc.BASE_FEATURES
     assert (out["model_version"] == fc.FALLBACK_VERSION).all()
     assert (out["base_version"] == fc.FALLBACK_VERSION).all()
+
+
+def test_predict_live_falls_back_when_the_newest_neso_vintage_is_stale(monkeypatch):
+    # NESO stalls for 12 h: its full-coverage vintage is old, and training never saw one that old.
+    con, issue, seen = live_setup(monkeypatch, covered=fc.HORIZON, vintage_age_h=12)
+    out = fc.predict_live(con, issue.to_pydatetime())
+    assert list(seen["X"].columns) == fc.BASE_FEATURES
+    assert (out["model_version"] == fc.FALLBACK_VERSION).all()
+
+
+def test_predict_live_keeps_a_vintage_a_few_hours_old(monkeypatch):
+    # Healthy runs are 3 h apart and NESO publishes hourly: 3 h old must not trigger the fallback.
+    con, issue, seen = live_setup(monkeypatch, covered=fc.HORIZON, vintage_age_h=3)
+    out = fc.predict_live(con, issue.to_pydatetime())
+    assert (out["model_version"] == fc.MODEL_VERSION).all()
 
 
 def scored_preds(days: int = 60, seed: int = 0) -> pd.DataFrame:
