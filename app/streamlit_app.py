@@ -63,6 +63,14 @@ def typical_day(typical: pd.DataFrame) -> pd.DataFrame:
     return (sums["gn"] / sums["n"]).unstack().reindex(columns=range(48)).dropna()
 
 
+def month_span(month: str, first: pd.Timestamp, last: pd.Timestamp) -> str:
+    """Which year(s) a month's data comes from, e.g. 'November 2025' or 'November 2025, plus the
+    start of 2026' when the 12-month window reaches into the same month again."""
+    if first.year == last.year:
+        return f"{month} {first.year}"
+    return f"{month} {first.year}, plus the start of {last.year}"
+
+
 FULL_YEAR_MIN_N = 16_644  # 95% of a year's 17,520 half-hours: fewer is a part year
 
 
@@ -478,7 +486,7 @@ def main() -> None:
     with greenest_tab:
         typical = q("""
             select month, halfhour_slot, is_weekend, avg(actual_gco2_kwh) as g,
-                   count(actual_gco2_kwh) as n
+                   count(actual_gco2_kwh) as n, min(period_from) as first, max(period_from) as last
             from marts.fct_grid_halfhourly
             where period_from > (select max(period_from) from marts.fct_grid_halfhourly)
                                 - interval 365 day
@@ -559,13 +567,15 @@ def main() -> None:
                 xanchor="left",
                 font=dict(color=AQUA),
             )
+            span = month_span(month, sel["first"].min(), sel["last"].max())
             fig.update_layout(
-                title=f"A typical day in {month} (average, last 12 months)",
+                title=f"A typical day in {month} (average of {span})",
                 hovermode="x unified",
                 xaxis=dict(nticks=13),
                 legend=dict(orientation="h", y=1.12, x=1, xanchor="right"),
             )
             st.plotly_chart(fig, width="stretch")
+            st.caption("One month of data, so a windy or still spell can shift the shape.")
 
             # Every month at a glance; hover for values. Darker = dirtier.
             heat = by_slot.set_axis([months[i - 1][:3] for i in by_slot.index])
