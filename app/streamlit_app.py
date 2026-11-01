@@ -71,6 +71,19 @@ def month_span(month: str, first: pd.Timestamp, last: pd.Timestamp) -> str:
     return f"{month} {first.year}, plus the start of {last.year}"
 
 
+def miss_sentence(mae: float, mean_actual: float, within: float, p90: float) -> str:
+    """Plain-words reading of the average miss. `within` is the share (0-1) of forecasts whose miss
+    was no bigger than the average; `p90` is the miss that 1 in 10 forecasts exceed. The average
+    is not a bound: misses are skewed, so the tail is stated."""
+    return (
+        f"Put simply: when we forecast, say, 150 gCO₂/kWh, the real figure is on average about "
+        f"**{mae:.0f}** away, roughly **{mae / mean_actual:.0%}** of a typical value. About "
+        f"**{round(within * 10)} in 10** forecasts land within that; 1 in 10 is off by "
+        f"**{p90:.0f} or more**, for example when the weather forecast was wrong. The chart below "
+        "splits this by how far ahead the forecast was looking."
+    )
+
+
 FULL_YEAR_MIN_N = 16_644  # 95% of a year's 17,520 half-hours: fewer is a part year
 
 
@@ -695,7 +708,8 @@ def main() -> None:
             overall = scored.set_index("band").loc["All"]
             c1, c2, c3 = st.columns(3)
             c1.metric("Our forecast is typically off by", f"{overall.our_mae:.0f} gCO₂/kWh",
-                      help="Average distance between forecast and actual, high or low")  # fmt: skip
+                      help="Average distance between forecast and actual, high or low, over all "
+                           "model versions scored so far")  # fmt: skip
             c2.metric("NESO's forecast is typically off by", f"{overall.neso_mae:.0f} gCO₂/kWh")
             c3.metric("Half-hours where ours was closer", f"{overall.we_closer:.0f}%")
             version, _ = model_label(issue_meta.v)
@@ -705,12 +719,15 @@ def main() -> None:
                          if share else f"has no scored half-hours yet; all {overall.n:,.0f} "
                          "are from earlier versions")  # fmt: skip
             st.caption(f"Latest model: {version}. It {scored_by}.")
-            st.markdown(
-                f"Put simply: when we forecast, say, 150 gCO₂/kWh, the real figure usually lands "
-                f"within about **{overall.our_mae:.0f}** of that, which is roughly "
-                f"**{overall.our_mae / overall.mean_actual:.0%}** of a typical value. The chart "
-                "below splits this by how far ahead the forecast was looking."
-            )
+            tail = q("""
+                select avg((model_abs_error <= m)::int) as within,
+                       quantile_cont(model_abs_error, 0.9) as p90
+                from marts.fct_model_vs_official,
+                     (select avg(model_abs_error) as m from marts.fct_model_vs_official
+                      where actual_gco2_kwh is not null and neso_abs_error is not null)
+                where actual_gco2_kwh is not null and neso_abs_error is not null
+            """).iloc[0]
+            st.markdown(miss_sentence(overall.our_mae, overall.mean_actual, tail.within, tail.p90))
 
             bands = scored[scored.band != "All"].assign(label=lambda d: d.band.map(PLAIN_BANDS))
             fig = go.Figure()
