@@ -22,7 +22,7 @@ flowchart LR
   D --> F[48h LightGBM forecast]
   F --> D
   D --> S[Streamlit dashboard]
-  G[GitHub Actions<br/>hourly + external trigger] --> E
+  G[GitHub Actions<br/>every 3 h, external trigger] --> E
 ```
 
 ## Key findings
@@ -74,7 +74,7 @@ wind-farm clusters plus the 3 original wind points), each a separate input, cut 
 figure above: a GB average hides calm in one cluster while another blows. If NESO's feed stalls or
 a wind point is missing from the weather snapshot, the pipeline falls back to the model without
 those inputs and labels the forecasts `lgbm-direct-v4-fallback`. A NESO portal failure or stale
-NESO data only warns; it never stops the hourly run.
+NESO data only warns; it never stops the scheduled run.
 
 ## The dashboard
 
@@ -112,10 +112,10 @@ Found by running against the real APIs, not by unit tests (full write-up in
   persistence blend was tuned on half the backtest and checked on the other half: 0–2 h error
   fell from 19.1 to 17.0.
 - **GitHub skipped half the scheduled runs.** At "every 2 hours", GitHub started only 12 of 26
-  scheduled runs over 16–18 Oct (median gap 4.4 h). The schedule now asks hourly, and an external
-  scheduler (cron-job.org) calls the workflow-dispatch API every 2 hours with a token scoped to
-  this repo's Actions only. Overlapping runs are blocked and loads are idempotent, so extra runs
-  are harmless.
+  scheduled runs over 16–18 Oct (median gap 4.4 h). An external scheduler (cron-job.org) now
+  calls the workflow-dispatch API every 3 hours with a token scoped to this repo's Actions only,
+  and the GitHub schedule is gone (fewer runs, to fit MotherDuck's free tier).
+  Overlapping runs are blocked and loads are idempotent, so extra runs are harmless.
 
 ## Status
 
@@ -126,7 +126,7 @@ Found by running against the real APIs, not by unit tests (full write-up in
 | 3 | Extraction + idempotent loading + backfill (48 offline tests) | ✅ Done |
 | 4 | MotherDuck cloud warehouse (same code, `DB_TARGET=motherduck`) | ✅ Done |
 | 5 | dbt models (staging → marts) + 25 data tests | ✅ Done |
-| 6 | Scheduled GitHub Actions pipeline (hourly) + dbt docs site | ✅ Live |
+| 6 | Scheduled GitHub Actions pipeline (every 3 h) + dbt docs site | ✅ Live |
 | 7 | Analysis & findings → [`docs/findings.md`](docs/findings.md) | ✅ Done |
 | 8 | 48h forecast, backtest, live scoring vs NESO → [`docs/backtest.md`](docs/backtest.md) | ✅ Live |
 | 9 | Streamlit dashboard (`app/streamlit_app.py`) → [live](https://gb-grid-carbon-b8k4zy3yzvfzqzxewxzdsk.streamlit.app/) | ✅ Live |

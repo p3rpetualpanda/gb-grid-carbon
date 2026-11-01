@@ -357,3 +357,16 @@ Nothing to fix in the model; it is the cost of 2-day-ahead wind forecasts.
 - **Why:** two tabs asked the same question (when should I run a task of this length?) with two
   sliders; one answered from the live forecast, the other from 12-month averages. One tab with one
   slider shows both answers side by side.
+
+## 2026-11-01: Pipeline every 3 h, cron-job.org only
+
+- **What:** the GitHub `schedule` trigger (hourly) is removed from `pipeline.yml`. cron-job.org,
+  calling `workflow_dispatch`, is now the only trigger, set to every 3 h.
+- **Why:** MotherDuck is on the free Lite plan (10 h of compute a month). Since 25 Oct the two
+  triggers ran the pipeline about 17-18 times a day, 2.9 min a run on average: 6 h of runner
+  time in 7 days. Every 3 h is 8 runs a day, about 12 h a month of runner time, and only part of
+  each run uses MotherDuck. The GitHub schedule was the unreliable half anyway (median gap 4.4 h
+  when asked for every 2 h).
+- **Trade-off:** the dashboard and forecast can be up to 3 h old. No backup trigger: if
+  cron-job.org stops, nothing runs. A side effect: GitHub's 60-day schedule shut-off no longer
+  applies.
