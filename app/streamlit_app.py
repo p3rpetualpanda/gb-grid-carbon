@@ -347,6 +347,7 @@ def main() -> None:
                 hovermode="x unified",
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             )
+            fig.update_yaxes(hoverformat=".2f")
             st.plotly_chart(fig, width="stretch")
             bands = scored[scored.band != "All"].set_index("band")
             if bands.empty:
@@ -393,6 +394,7 @@ def main() -> None:
                     hovermode="x unified",
                     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
                 )
+                fig.update_yaxes(hoverformat=".2f")
                 st.plotly_chart(fig, width="stretch")
                 st.caption("More wind and sun means lower carbon. Each line is NESO's newest "
                            "forecast for that half-hour.")  # fmt: skip
@@ -415,13 +417,13 @@ def main() -> None:
             now_mix = mix.iloc[-1]
             shares = now_mix[list(FUEL_COLOURS)].astype(float).sort_values()
             c1, c2 = st.columns([1, 2])
-            fig = px.bar(x=shares.values, y=shares.index, orientation="h", text_auto=".0f",
+            fig = px.bar(x=shares.values, y=shares.index, orientation="h", text_auto=".2f",
                          color=shares.index, color_discrete_map=FUEL_COLOURS,
                          labels=dict(x="% of generation", y=""))  # fmt: skip
             fig.update_layout(title=f"Now ({hhmm(now_mix.period_from)})", showlegend=False)
             fig.update_xaxes(range=[0, shares.max() * 1.2])  # room for the outside labels
             fig.update_traces(textposition="outside", cliponaxis=False,
-                              hovertemplate="%{y}: %{x:.1f}%<extra></extra>")  # fmt: skip
+                              hovertemplate="%{y}: %{x:.2f}%<extra></extra>")  # fmt: skip
             c1.plotly_chart(fig, width="stretch")
             long = mix.melt("period_from", var_name="fuel", value_name="pct")
             long["period_from"] = uk(long["period_from"])
@@ -430,6 +432,7 @@ def main() -> None:
                           category_orders=dict(fuel=list(FUEL_COLOURS)),
                           labels=dict(period_from="", pct="% of generation", fuel=""))  # fmt: skip
             fig.update_layout(title="Last 7 days", hovermode="x unified")
+            fig.update_yaxes(hoverformat=".2f")
             c2.plotly_chart(fig, width="stretch")
             st.caption("Other = biomass, hydro, coal and other sources. Shares of GB generation "
                        "(Carbon Intensity API).")  # fmt: skip
@@ -504,7 +507,7 @@ def main() -> None:
                 category_orders=dict(kind=list(kinds.values())),
                 labels=dict(time="UK time", g="gCO₂/kWh", kind=""),
             )
-            fig.update_traces(line_width=2, hovertemplate="%{x}: %{y:.0f} gCO₂/kWh")
+            fig.update_traces(line_width=2, hovertemplate="%{x}: %{y:.2f} gCO₂/kWh")
             start = day_windows(day, task_h).idxmin()
             end = start + round(task_h * 2) - 1
             for x0, x1 in [(start, end)] if end < 48 else [(start, 47), (0, end - 48)]:
@@ -536,7 +539,7 @@ def main() -> None:
                 labels=dict(x="UK time", y="", color="gCO₂/kWh"),
             )
             fig.update_traces(
-                xgap=1, ygap=2, hovertemplate="%{y} %{x}: %{z:.0f} gCO₂/kWh<extra></extra>"
+                xgap=1, ygap=2, hovertemplate="%{y} %{x}: %{z:.2f} gCO₂/kWh<extra></extra>"
             )
             fig.update_layout(
                 title="Every month: average intensity by time of day (darker = dirtier)",
@@ -573,6 +576,7 @@ def main() -> None:
                         line=dict(color=BLUE, width=2))  # fmt: skip
         fig.update_layout(title="GB carbon intensity since 2017 (30-day rolling average)",
                           yaxis_title="gCO₂/kWh", hovermode="x unified")  # fmt: skip
+        fig.update_yaxes(hoverformat=".2f")
         st.plotly_chart(fig, width="stretch")
 
     with regions_tab:
@@ -584,11 +588,16 @@ def main() -> None:
             group by 1 order by g
         """)
         fig = px.bar(reg, x="g", y="region", orientation="h", color_discrete_sequence=[BLUE],
-                     text_auto=".0f", labels=dict(g="gCO₂/kWh", region=""))  # fmt: skip
+                     text_auto=".2f", labels=dict(g="gCO₂/kWh", region=""))  # fmt: skip
         fig.update_layout(title="Average forecast intensity by region, last 30 days",
                           yaxis=dict(autorange="reversed"))  # fmt: skip
         # outside: plotly hides labels on zero-width bars (North Scotland is ~0)
-        fig.update_traces(textposition="outside", textangle=0, cliponaxis=False)
+        fig.update_traces(
+            textposition="outside",
+            textangle=0,
+            cliponaxis=False,
+            hovertemplate="%{y}: %{x:.2f} gCO₂/kWh<extra></extra>",
+        )
         st.plotly_chart(fig, width="stretch")
 
     with accuracy_tab:
@@ -619,8 +628,8 @@ def main() -> None:
             for col, name, colour in (("our_mae", "Our forecast", ORANGE),
                                       ("neso_mae", "NESO's forecast", AQUA)):  # fmt: skip
                 fig.add_bar(x=bands.label, y=bands[col], name=name, marker_color=colour,
-                            text=bands[col].round(0), textposition="outside",
-                            hovertemplate="%{x}: off by %{y:.0f} gCO₂/kWh")  # fmt: skip
+                            text=bands[col].round(2), textposition="outside",
+                            hovertemplate="%{x}: off by %{y:.2f} gCO₂/kWh")  # fmt: skip
             fig.update_layout(
                 title="Average miss by how far ahead (lower is better)",
                 yaxis_title="gCO₂/kWh",
@@ -646,6 +655,7 @@ def main() -> None:
                     hovermode="x unified",
                     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
                 )
+                fig.update_yaxes(hoverformat=".2f")
                 st.plotly_chart(fig, width="stretch")
                 st.caption("The most recent forecast whose whole 48 hours have now happened.")
 
