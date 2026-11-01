@@ -29,7 +29,7 @@ MODEL_VERSION = "lgbm-direct-v4"
 # BASE_FEATURES only, when NESO or wind-point inputs are missing
 FALLBACK_VERSION = "lgbm-direct-v4-fallback"
 # Short leads lean on the last known actual: weight exp(-(lead-1)/6). Decay chosen on the first
-# 6 backtest months, checked on the last 6 (0-2 h MAE 19.1 -> 17.0; overall unchanged).
+# 6 backtest months, checked on the last 6: see docs/decay_tuning.md (analysis/tune_decay.py).
 PERSISTENCE_DECAY = 6
 BASE_FEATURES = [
     "lead", "halfhour_slot", "iso_weekday", "month", "is_holiday",
@@ -253,14 +253,20 @@ def predict_live(con, now: datetime) -> pd.DataFrame:
         con.sql(
             GB_WEATHER_SQL.format(
                 table="raw.weather_forecast_snapshots",
-                where="where issued_at = "
-                "(select max(issued_at) from raw.weather_forecast_snapshots)",
+                # Not after the issue: a later run's snapshot must not leak into this forecast.
+                where="where issued_at = (select max(issued_at) from "
+                f"raw.weather_forecast_snapshots where issued_at <= '{issue.isoformat()}')",
             )
         )
         .df()
         .set_index("hour_utc")
     )
     rows = features(grid, wx_live.combine_first(wx_hist), pd.DatetimeIndex([issue]), hols, neso)
+    # The base inputs are never allowed to fall back, so a gap in them (stalled actuals, missing
+    # weather) must at least show in the log.
+    base_nan = rows[BASE_FEATURES].isna().sum()
+    if base_nan.any():
+        log.warning("base inputs missing at issue %s: %s", issue, base_nan[base_nan > 0].to_dict())
     # A stalled NESO feed or a wind point missing from the snapshot leaves inputs that training
     # almost never saw: fall back to BASE_FEATURES, and label it, rather than publish v4 on them.
     cols, version = FEATURES, MODEL_VERSION
