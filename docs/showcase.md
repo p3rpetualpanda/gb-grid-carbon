@@ -67,9 +67,10 @@ an outage.
 Retries with backoff for transient errors; if the run still fails it's logged in
 `meta.pipeline_runs` and GitHub emails me. The next run's look-back window fills the gap, and dbt
 source freshness fails the build after 24 h without new data. The weak spot is the trigger: since
-1 Nov only cron-job.org starts the pipeline (every 3 h, to stay inside MotherDuck's free tier), so
-if it stops there is no failed run to email me. The dashboard's "last refreshed" line is what
-would show it.
+1 Nov only cron-job.org starts the pipeline (every 3 h, to stay inside MotherDuck's free tier).
+cron-job.org emails me when its trigger call fails, and if the trigger goes silent a watchdog
+workflow fails (and GitHub emails me) after 7 h without a successful run. The dashboard's "last
+refreshed" line shows it too.
 
 **How did you avoid leakage in the forecast?**
 Features only use data known at issue time: actuals stop 1 h before (publication lag), "same
