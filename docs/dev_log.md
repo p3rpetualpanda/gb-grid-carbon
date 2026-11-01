@@ -370,3 +370,16 @@ Nothing to fix in the model; it is the cost of 2-day-ahead wind forecasts.
 - **Trade-off:** the dashboard and forecast can be up to 3 h old. No backup trigger: if
   cron-job.org stops, nothing runs. A side effect: GitHub's 60-day schedule shut-off no longer
   applies.
+
+## 2026-11-01: live v4 record refreshed (13 days)
+
+- **What:** the README's live paragraph now covers forecasts issued 20 Oct 11:00 UTC to 1 Nov
+  (186 forecasts, 16,398 scored half-hours), from `analysis/live_bias.py --since "2026-10-20
+  11:00"` on MotherDuck. MAE 16.2 vs NESO 28.1; bias -1.0 vs -22.9; 3 h window regret 4.3 vs 16.0.
+- **Why the start time:** the NESO embedded backfill finished on 20 Oct; earlier v4 runs trained
+  with those inputs mostly missing, so they are not the model the backtest scored.
+- **Surprise:** live 24-48 h MAE (18.0) is below the backtest's (19.6). The backtest's stitched
+  historical weather was expected to flatter long leads; it doesn't seem to.
+- **Not explained yet:** 28-30 Oct, both forecasts were too low (our bias -21.0 to -4.6, NESO's
+  -42 to -48). Check before the 8 Nov write-up.
+- **Caveat:** 13 days, no confidence interval until 45.
