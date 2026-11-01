@@ -554,3 +554,18 @@ and the baselines unchanged). README, showcase and the dashboard caption updated
 - **`gridcarbon check-warnings` and a `health` job.** NESO datasets fail soft by design. If the
   same dataset is skipped in each of the last 3 incremental runs, the new job fails the workflow
   run, so GitHub emails the owner and the 7 h watchdog also fires (it counts successful runs).
+
+## 1 Nov 2026: review follow-ups to #48-#50
+
+- The weather-point guard counted rows, not values, so a point present with a NULL value still
+  shifted the mean; it now counts values. A missing base weather input (wind, solar, temperature)
+  now stops the forecast step with an error: the fallback model also needs them, and a shifted
+  average was the old silent behaviour.
+- Optional datasets re-raise only connection, IO, transaction and duplicate-key errors; a type
+  error from a changed NESO layout is a skip again. The NESO 14-day snapshot follows the same rule.
+- The official forecast snapshot is stored before the weather fetch, so a weather failure no
+  longer loses it. An empty snapshot still fails the run (loud on purpose; a missed forecast per
+  blip is the cost).
+- `dim_region` id check is warn-only; the mix-gap test stops one day short of the latest period.
+- MotherDuck columns match `DDL` for all 13 tables, so the strict column check cannot reject a
+  real batch.

@@ -66,7 +66,7 @@ def _mean_of(col: str, points: tuple[str, ...]) -> str:
     """Average of `col` over `points`; NaN, not a shifted average, if any point is absent."""
     ids = ", ".join(f"'{p}'" for p in points)
     return (
-        f"case when count(*) filter (where point_id in ({ids})) = {len(points)} "
+        f"case when count({col}) filter (where point_id in ({ids})) = {len(points)} "
         f"then avg({col}) filter (where point_id in ({ids})) end"
     )
 
@@ -283,6 +283,9 @@ def predict_live(con, now: datetime) -> pd.DataFrame:
     base_nan = rows[BASE_FEATURES].isna().sum()
     if base_nan.any():
         log.warning("base inputs missing at issue %s: %s", issue, base_nan[base_nan > 0].to_dict())
+    # The fallback model needs these three; training almost never has them missing.
+    if rows[["wind_speed", "solar_radiation", "temperature"]].isna().any(axis=None):
+        raise RuntimeError(f"live weather inputs incomplete at issue {issue}; not forecasting")
     # A stalled NESO feed or a wind point missing from the snapshot leaves inputs that training
     # almost never saw: fall back to BASE_FEATURES, and label it, rather than publish v4 on them.
     cols, version = FEATURES, MODEL_VERSION

@@ -137,6 +137,16 @@ def _skip(run: dict, name: str, exc: Exception) -> None:
     run.setdefault("warnings", []).append(f"{name}: {type(exc).__name__}: {exc}"[:500])
 
 
+# Our own warehouse failing is not "the optional source is down"; a type or binder error from a
+# changed upstream layout is, so it is not listed.
+WAREHOUSE_ERRORS = (
+    duckdb.ConnectionException,
+    duckdb.IOException,
+    duckdb.TransactionException,
+    DuplicateKeyError,
+)
+
+
 def load_incremental(
     con: duckdb.DuckDBPyConnection,
     client: ApiClient,
@@ -149,8 +159,8 @@ def load_incremental(
     start, end = incremental_window(con, ds, now, lookback_days)
     try:
         return load_range(con, client, ds, start, end, run)
-    except (duckdb.Error, DuplicateKeyError):
-        raise  # our own warehouse failing is not "the optional source is down"
+    except WAREHOUSE_ERRORS:
+        raise
     except Exception as exc:
         if not ds.optional:
             raise
@@ -163,18 +173,20 @@ def snapshot_forecasts(
 ) -> int:
     """Append the forecasts as they look right now. These cannot be re-fetched later."""
     official = ci.fetch_official_forecast(client, now)
-    weather = wx.fetch_weather_forecast(client, now)
-    for name, frame in (("official forecast", official), ("weather forecast", weather)):
-        if frame.empty:  # upsert would accept it and the run would be green
-            raise ValueError(f"{name} snapshot came back empty")
-    n = upsert(
+    if official.empty:  # upsert would accept it and the run would be green
+        raise ValueError("official forecast snapshot came back empty")
+    official_n = upsert(
         con,
         "raw.official_forecast_snapshots",
         official,
         ("issued_at", "period_from"),
         run["run_id"],
     )
-    n += upsert(
+    run["rows_loaded"] += official_n  # counted now: the weather fetch below may fail
+    weather = wx.fetch_weather_forecast(client, now)
+    if weather.empty:
+        raise ValueError("weather forecast snapshot came back empty")
+    n = official_n + upsert(
         con,
         "raw.weather_forecast_snapshots",
         weather,
@@ -189,8 +201,10 @@ def snapshot_forecasts(
             ("issued_at", "period_from"),
             run["run_id"],
         )
+    except WAREHOUSE_ERRORS:
+        raise
     except Exception as exc:
         _skip(run, "neso_wind_14d_snapshots", exc)
     log.info("snapshots: %d rows", n)
-    run["rows_loaded"] += n
+    run["rows_loaded"] += n - official_n
     return n
