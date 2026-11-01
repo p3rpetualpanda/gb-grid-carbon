@@ -12,7 +12,7 @@ Material for the CV, LinkedIn and interviews. Every number comes from `docs/find
   31 December in year-spanning requests (missing data 10.4% → 0.29%), and 16 impossible upstream
   forecasts caught by a dbt range test.
 - Developed a 48-hour LightGBM carbon-intensity forecast with leakage-safe features and a 12-month
-  rolling-origin backtest; MAE <!-- bt:model_mae -->18.7<!-- /bt --> gCO₂/kWh, <!-- bt:improvement -->58%<!-- /bt --> better than naïve baselines, and scored live
+  rolling-origin backtest; MAE <!-- bt:model_mae -->18.6<!-- /bt --> gCO₂/kWh, <!-- bt:improvement -->58%<!-- /bt --> better than naïve baselines, and scored live
   against the system operator's forecast every pipeline run.
 - Analysed 9 years of grid data with bootstrap confidence intervals: intensity fell 48% (2018–2025),
   midday is now the cleanest time from spring to autumn, and smart EV charging cuts charging

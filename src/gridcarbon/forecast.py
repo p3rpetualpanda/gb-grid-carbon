@@ -28,9 +28,9 @@ ISSUE_EVERY = "390min"
 MODEL_VERSION = "lgbm-direct-v4"
 # BASE_FEATURES only, when NESO or wind-point inputs are missing
 FALLBACK_VERSION = "lgbm-direct-v4-fallback"
-# Short leads lean on the last known actual: weight exp(-(lead-1)/6). Decay chosen on the first
+# Short leads lean on the last known actual: weight exp(-(lead-1)/decay). Decay chosen on the first
 # 6 backtest months, checked on the last 6: see docs/decay_tuning.md (analysis/tune_decay.py).
-PERSISTENCE_DECAY = 6
+PERSISTENCE_DECAY = 2
 BASE_FEATURES = [
     "lead", "halfhour_slot", "iso_weekday", "month", "is_holiday",
     "last_actual", "mean_24h", "lag_day", "lag_week",

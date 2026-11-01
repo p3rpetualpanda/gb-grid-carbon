@@ -102,6 +102,13 @@ def test_blend_trusts_last_actual_at_lead_1_and_model_far_out():
     assert out[2] == 170  # no known actual: the model
 
 
+def test_blend_weight_decays_with_lead_at_the_tuned_rate():
+    # docs/decay_tuning.md: decay 2, so the actual's weight is exp(-1) two steps out.
+    rows = pd.DataFrame({"lead": [3], "last_actual": [100.0]})
+    w = np.exp(-1)
+    assert fc.blend(rows, [200.0])[0] == pytest.approx(w * 100 + (1 - w) * 200)
+
+
 def test_training_issues_cover_every_half_hour_of_the_day():
     # Regression: a fixed 6 h issue grid never trained on live issue times like 13:30.
     issues = fc.issue_times(START, START + pd.Timedelta(days=30))

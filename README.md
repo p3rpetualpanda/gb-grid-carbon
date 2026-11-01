@@ -47,7 +47,7 @@ From [`docs/findings.md`](docs/findings.md) (every number computed by `analysis/
 
 A direct multi-horizon LightGBM model predicts all 96 half-hours of the next 48 h from the
 calendar, recent actuals, forecast weather and NESO's own embedded wind/solar forecasts. Over a 12-month
-rolling-origin backtest (last run <!-- bt:run_date -->2026-10-19<!-- /bt -->) its MAE is **<!-- bt:model_mae -->18.7<!-- /bt --> gCO₂/kWh**,
+rolling-origin backtest (last run <!-- bt:run_date -->2026-11-01<!-- /bt -->) its MAE is **<!-- bt:model_mae -->18.6<!-- /bt --> gCO₂/kWh**,
 **<!-- bt:improvement -->58%<!-- /bt --> better** than the best naïve baseline (<!-- bt:best_baseline_mae -->44.3<!-- /bt -->), and it beats "repeat the last
 actual" at every lead time. NESO's published forecast scores <!-- bt:neso_mae -->9.9<!-- /bt -->, but the API keeps only NESO's *final*, short-lead forecast, so the fair comparison is the
 **live track record**: both forecasts issued in the same pipeline run, scored when actuals arrive
@@ -68,7 +68,7 @@ forecasts came in too low, NESO by more (MAE 42–50 vs our 15–23), as wind fe
 over 27–29 Oct and the 1–2 day weather forecast had it too windy (same cause as 22 Oct, opposite sign).
 
 **NESO forecasts as inputs.** NESO's embedded wind/solar forecasts (always the vintage published
-before each forecast) cut the backtest MAE from <!-- bt:previous_model_mae -->27.0<!-- /bt --> to <!-- bt:v3_model_mae -->20.9<!-- /bt -->. NESO's transmission wind
+before each forecast) cut the backtest MAE from <!-- bt:previous_model_mae -->26.9<!-- /bt --> to <!-- bt:v3_model_mae -->20.8<!-- /bt -->. NESO's transmission wind
 forecast is left out: its archive only covers the day each forecast is published, so most 48 h
 targets lack it.
 
@@ -113,7 +113,8 @@ Found by running against the real APIs, not by unit tests (full write-up in
   skew (training issue times on a fixed 6 h grid; fixed with a 6.5 h grid that cycles through
   every half-hour), plus the model under-weighting the latest actual at very short leads. A
   persistence blend was tuned on half the backtest and checked on the other half: 0–2 h error
-  fell from 19.1 to 17.0.
+  fell from 19.1 to 17.0 (decay 6; a 1 Nov re-check
+  found decay 2 better and it is now live, see docs/decay_tuning.md).
 - **GitHub skipped half the scheduled runs.** At "every 2 hours", GitHub started only 12 of 26
   scheduled runs over 16–18 Oct (median gap 4.4 h). An external scheduler (cron-job.org) now
   calls the workflow-dispatch API every 3 hours with a token scoped to this repo's Actions only,
@@ -133,8 +134,8 @@ Found by running against the real APIs, not by unit tests (full write-up in
 | 7 | Analysis & findings → [`docs/findings.md`](docs/findings.md) | ✅ Done |
 | 8 | 48h forecast, backtest, live scoring vs NESO → [`docs/backtest.md`](docs/backtest.md) | ✅ Live |
 | 9 | Streamlit dashboard (`app/streamlit_app.py`) → [live](https://gb-grid-carbon-b8k4zy3yzvfzqzxewxzdsk.streamlit.app/) | ✅ Live |
-| 10 | NESO embedded wind/solar forecasts as live model inputs (backtest MAE <!-- bt:previous_model_mae -->27.0<!-- /bt --> → <!-- bt:v3_model_mae -->20.9<!-- /bt -->) | ✅ Live |
-| 11 | Forecast wind speed at 11 wind-farm points as live model inputs (backtest MAE <!-- bt:v3_model_mae -->20.9<!-- /bt --> → <!-- bt:model_mae -->18.7<!-- /bt -->) | ✅ Live |
+| 10 | NESO embedded wind/solar forecasts as live model inputs (backtest MAE <!-- bt:previous_model_mae -->26.9<!-- /bt --> → <!-- bt:v3_model_mae -->20.8<!-- /bt -->) | ✅ Live |
+| 11 | Forecast wind speed at 11 wind-farm points as live model inputs (backtest MAE <!-- bt:v3_model_mae -->20.8<!-- /bt --> → <!-- bt:model_mae -->18.6<!-- /bt -->) | ✅ Live |
 
 Full plan: [`docs/project_plan.md`](docs/project_plan.md). Decisions and surprises:
 [`docs/dev_log.md`](docs/dev_log.md). CV bullets and interview notes:
