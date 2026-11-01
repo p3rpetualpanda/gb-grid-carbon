@@ -213,3 +213,13 @@ def test_model_label_strips_the_fallback_suffix():
     assert app.model_label("lgbm-direct-v4.1") == ("lgbm-direct-v4.1", False)
     assert app.model_label("lgbm-direct-v4.1-fallback") == ("lgbm-direct-v4.1", True)
     assert app.model_label(None) == ("unknown", False)
+
+
+def test_month_span_names_the_years_the_window_draws_on():
+    t = pd.Timestamp
+    assert app.month_span("November", t("2025-11-01", tz="UTC"), t("2025-11-30", tz="UTC")) == (
+        "November 2025"
+    )
+    assert app.month_span("November", t("2025-11-01", tz="UTC"), t("2026-11-01", tz="UTC")) == (
+        "November 2025, plus the start of 2026"
+    )
