@@ -114,11 +114,18 @@ def incremental(
     now = utcnow()
     with tracked_run(con, "incremental") as run:
         # Snapshots first: they can't be fetched later, while a failed load catches up through
-        # the next run's look-back window.
+        # the next run's look-back window. A failed snapshot must not stall the loads, so it is
+        # raised after them.
+        snapshot_error = None
         if snapshots:
-            snapshot_forecasts(con, client, now, run)
+            try:
+                snapshot_forecasts(con, client, now, run)
+            except Exception as exc:
+                snapshot_error = exc
         for name in names:
             load_incremental(con, client, DATASETS[name], now, lookback, run)
+        if snapshot_error:
+            raise snapshot_error
     typer.echo(f"Incremental finished: {run['rows_loaded']:,} rows (run {run['run_id']}).")
     for warning in run.get("warnings", []):
         typer.echo(f"Skipped: {warning}", err=True)

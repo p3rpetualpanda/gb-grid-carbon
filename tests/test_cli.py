@@ -28,3 +28,17 @@ def test_incremental_snapshots_even_if_a_load_fails(runner, monkeypatch):
     result = runner.invoke(cli.app, ["incremental"])
     assert result.exit_code != 0
     assert calls == ["snapshot"]
+
+
+def test_incremental_still_loads_when_a_snapshot_fails(runner, monkeypatch):
+    # An Open-Meteo outage must not stall the actuals; the run still ends failed.
+    loaded = []
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("open-meteo is down")
+
+    monkeypatch.setattr(cli, "snapshot_forecasts", boom)
+    monkeypatch.setattr(cli, "load_incremental", lambda *a, **k: loaded.append(a[2].name))
+    result = runner.invoke(cli.app, ["incremental"])
+    assert result.exit_code != 0
+    assert loaded

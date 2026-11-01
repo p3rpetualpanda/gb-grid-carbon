@@ -20,7 +20,7 @@ from gridcarbon.config import Settings
 from gridcarbon.load import connect
 
 ROOT = Path(__file__).resolve().parents[1]
-CANDIDATES = [2, 3, 4, 6, 8, 12, 24]
+CANDIDATES = [1, 1.5, 2, 3, 4, 6, 8, 12, 24]
 sys.stdout.reconfigure(encoding="utf-8")
 
 con = connect(Settings(db_target="local"))
@@ -28,7 +28,9 @@ grid, wx = fc.load_history(con)
 neso = fc.load_neso_forecasts(con)
 # raw model output: blend returns the model prediction untouched
 fc.blend = lambda rows, model_pred: np.asarray(model_pred)  # type: ignore[assignment]
-preds = fc.backtest(grid, wx, fc.holidays(), months=12, neso=neso).dropna(subset=["last_actual"])
+preds = fc.backtest(grid, wx, fc.holidays(), months=12, neso=neso)
+# Rows without a last known actual get no blend, as live (and as in analysis/backtest.py).
+preds["last_actual"] = preds["last_actual"].fillna(preds["model"])
 
 
 def mae(df: pd.DataFrame, decay: float | None, leads: tuple[int, int] = (1, 96)) -> float:
@@ -41,7 +43,7 @@ def mae(df: pd.DataFrame, decay: float | None, leads: tuple[int, int] = (1, 96))
     return float((pred - df["y"]).abs().mean())
 
 
-months = preds["period_from"].dt.to_period("M")
+months = preds["period_from"].dt.tz_convert("UTC").dt.strftime("%Y-%m")
 order = sorted(months.unique())
 first, last = preds[months.isin(order[:6])], preds[months.isin(order[6:])]
 best = min(CANDIDATES, key=lambda d: mae(first, d))
@@ -54,8 +56,8 @@ rows = [
     }
     for d in [None, *CANDIDATES]
 ]
-table = pd.DataFrame(rows).round(2).fillna("")
-table["decay"] = table["decay"].map(lambda d: "no blend" if d == "" else str(int(d)))
+table = pd.DataFrame(rows).round(2)
+table["decay"] = table["decay"].map(lambda d: "no blend" if pd.isna(d) else f"{d:g}")
 md = "\n".join(
     "| " + " | ".join(map(str, r)) + " |"
     for r in [table.columns, ["---"] * len(table.columns), *table.to_numpy()]
