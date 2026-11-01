@@ -54,3 +54,13 @@ def test_gives_up_on_a_body_that_is_never_json(client):
     with pytest.raises(RetryableHTTPError, match="not JSON"):
         client.get_json(URL)
     assert len(responses.calls) == client.max_attempts
+
+
+@responses.activate
+def test_retries_a_body_cut_off_mid_transfer(client):
+    import requests
+
+    responses.add(responses.GET, URL, body=requests.exceptions.ChunkedEncodingError("cut"))
+    responses.add(responses.GET, URL, json={"ok": True})
+    assert client.get_json(URL) == {"ok": True}
+    assert len(responses.calls) == 2

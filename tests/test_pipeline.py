@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 from gridcarbon import pipeline
-from gridcarbon.load import upsert
+from gridcarbon.load import DuplicateKeyError, upsert
 from gridcarbon.timeutils import HALF_HOUR
 
 NOW = datetime(2024, 6, 1, 12, 47, tzinfo=UTC)
@@ -58,6 +58,14 @@ def test_backfill_resumes_without_refetching(con):
     assert con.execute(f"SELECT count(*) FROM {ds.table}").fetchone()[0] == 4
 
 
+def weather_snapshot(issued: datetime) -> pd.DataFrame:
+    return pd.DataFrame({
+        "issued_at": pd.to_datetime([issued], utc=True), "time": pd.to_datetime([issued], utc=True),
+        "point_id": ["london"], "latitude": [51.5], "longitude": [-0.1], "temperature_2m": [10.0],
+        "wind_speed_100m": [20.0], "shortwave_radiation": [0.0], "cloud_cover": [50.0],
+    })  # fmt: skip
+
+
 def test_snapshot_forecasts_appends_by_issue_time(con, monkeypatch):
     issued = datetime(2024, 6, 1, 12, 30, tzinfo=UTC)
     official = pd.DataFrame({
@@ -67,9 +75,7 @@ def test_snapshot_forecasts_appends_by_issue_time(con, monkeypatch):
         "forecast": [120, 110], "intensity_index": ["moderate", "moderate"],
     })  # fmt: skip
     monkeypatch.setattr(pipeline.ci, "fetch_official_forecast", lambda c, now: official)
-    monkeypatch.setattr(
-        pipeline.wx, "fetch_weather_forecast", lambda c, now: official.iloc[0:0][["issued_at"]]
-    )
+    monkeypatch.setattr(pipeline.wx, "fetch_weather_forecast", lambda c, now: weather_snapshot(NOW))
     wind = pd.DataFrame({
         "issued_at": pd.to_datetime([issued], utc=True),
         "period_from": pd.to_datetime([issued], utc=True),
@@ -112,6 +118,46 @@ def test_optional_dataset_failure_is_recorded_not_raised(con):
         pipeline.load_incremental(con, None, replace(INTENSITY, fetch=down), NOW, 3, run)
 
 
+def test_optional_dataset_does_not_swallow_a_warehouse_error(con):
+    # Only a fetch or parse failure is a skipped dataset; a duplicate-key refusal fails the run.
+    row = pd.DataFrame({
+        "issued_at": pd.to_datetime([NOW], utc=True),
+        "period_from": pd.to_datetime([NOW], utc=True),
+        "wind_mw": [1.0], "wind_capacity_mw": [2.0], "solar_mw": [0.0], "solar_capacity_mw": [3.0],
+    })  # fmt: skip
+    table = "raw.neso_embedded_forecast"
+    upsert(con, table, row, ("issued_at", "period_from"), "r0")
+    con.execute(f"INSERT INTO {table} SELECT * FROM {table}")  # a past bug left two rows per key
+    ds = replace(
+        pipeline.DATASETS["neso_embedded_forecast"], fetch=lambda c, a, b: row.assign(wind_mw=9.0)
+    )
+    run = {"run_id": "r1", "rows_loaded": 0}
+    with pytest.raises(DuplicateKeyError):
+        pipeline.load_incremental(con, None, ds, NOW, 3, run)
+
+
+@pytest.mark.parametrize("empty", ["official", "weather"])
+def test_snapshot_forecasts_refuse_an_empty_response(con, monkeypatch, empty):
+    # A snapshot cannot be re-fetched later, so an empty one must fail the run, not pass quietly.
+    official = pd.DataFrame({
+        "issued_at": pd.to_datetime([NOW], utc=True),
+        "period_from": pd.to_datetime([NOW], utc=True),
+        "period_to": pd.to_datetime([NOW + HALF_HOUR], utc=True),
+        "forecast": [120], "intensity_index": ["moderate"],
+    })  # fmt: skip
+    weather = weather_snapshot(NOW)
+    monkeypatch.setattr(
+        pipeline.ci, "fetch_official_forecast",
+        lambda c, now: official.iloc[0:0] if empty == "official" else official,
+    )  # fmt: skip
+    monkeypatch.setattr(
+        pipeline.wx, "fetch_weather_forecast",
+        lambda c, now: weather.iloc[0:0] if empty == "weather" else weather,
+    )  # fmt: skip
+    with pytest.raises(ValueError, match="empty"):
+        pipeline.snapshot_forecasts(con, None, NOW, {"run_id": "r1", "rows_loaded": 0})
+
+
 def test_snapshots_survive_a_neso_failure(con, monkeypatch):
     official = pd.DataFrame({
         "issued_at": pd.to_datetime([NOW], utc=True),
@@ -120,14 +166,12 @@ def test_snapshots_survive_a_neso_failure(con, monkeypatch):
         "forecast": [120], "intensity_index": ["moderate"],
     })  # fmt: skip
     monkeypatch.setattr(pipeline.ci, "fetch_official_forecast", lambda c, now: official)
-    monkeypatch.setattr(
-        pipeline.wx, "fetch_weather_forecast", lambda c, now: official.iloc[0:0][["issued_at"]]
-    )
+    monkeypatch.setattr(pipeline.wx, "fetch_weather_forecast", lambda c, now: weather_snapshot(NOW))
 
     def down(client):
         raise RuntimeError("NESO portal down")
 
     monkeypatch.setattr(pipeline.neso, "fetch_wind_14d_forecast", down)
     run = {"run_id": "r1", "rows_loaded": 0}
-    assert pipeline.snapshot_forecasts(con, None, NOW, run) == 1
+    assert pipeline.snapshot_forecasts(con, None, NOW, run) == 2  # official + weather
     assert "neso_wind_14d" in run["warnings"][0]

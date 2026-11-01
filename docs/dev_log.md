@@ -524,3 +524,18 @@ and the baselines unchanged). README, showcase and the dashboard caption updated
   so a snapshot missing `london` quietly shifted the solar and temperature means. Each mean is now
   NaN unless every point is present, which the base-input warning reports. The dbt weather model
   and training keep their averages; they read observed data, not snapshots.
+
+## 1 Nov 2026: loader guards
+
+- **Optional datasets no longer hide our own failures.** `load_incremental` turned any exception
+  from an optional (NESO) dataset into a warning, including a DuckDB error or the duplicate-key
+  refusal from `upsert`. Those now propagate (`DuplicateKeyError`, `duckdb.Error`); only fetch and
+  parse failures are skipped.
+- **`upsert` checks the batch's columns** against the table (minus lineage). A dropped column used
+  to be written as NULL for every row. A real `gridcarbon incremental` against the local warehouse
+  passed it for all datasets and snapshots.
+- **Empty snapshots fail the run.** An empty official or weather forecast snapshot could not be
+  re-fetched later and used to pass silently.
+- **Retries** now also cover `ChunkedEncodingError` and `ContentDecodingError` (body cut off).
+- **Not done: expected-row counts per window.** The fuel set and regional coverage differ in early
+  history, so a fixed count would reject real windows; it needs per-period minimums first.

@@ -14,7 +14,7 @@ from gridcarbon.extract import carbon_intensity as ci
 from gridcarbon.extract import neso
 from gridcarbon.extract import weather as wx
 from gridcarbon.http import ApiClient
-from gridcarbon.load import loaded_windows, log_window, max_time, upsert
+from gridcarbon.load import DuplicateKeyError, loaded_windows, log_window, max_time, upsert
 from gridcarbon.timeutils import HALF_HOUR, chunk_range, ensure_utc, floor_half_hour
 
 log = logging.getLogger(__name__)
@@ -149,6 +149,8 @@ def load_incremental(
     start, end = incremental_window(con, ds, now, lookback_days)
     try:
         return load_range(con, client, ds, start, end, run)
+    except (duckdb.Error, DuplicateKeyError):
+        raise  # our own warehouse failing is not "the optional source is down"
     except Exception as exc:
         if not ds.optional:
             raise
@@ -162,6 +164,9 @@ def snapshot_forecasts(
     """Append the forecasts as they look right now. These cannot be re-fetched later."""
     official = ci.fetch_official_forecast(client, now)
     weather = wx.fetch_weather_forecast(client, now)
+    for name, frame in (("official forecast", official), ("weather forecast", weather)):
+        if frame.empty:  # upsert would accept it and the run would be green
+            raise ValueError(f"{name} snapshot came back empty")
     n = upsert(
         con,
         "raw.official_forecast_snapshots",

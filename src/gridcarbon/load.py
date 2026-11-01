@@ -111,6 +111,10 @@ def utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+class DuplicateKeyError(ValueError):
+    """A table already holds two rows for one natural key (a past bug); loading would hide it."""
+
+
 def upsert(
     con: duckdb.DuckDBPyConnection,
     table: str,
@@ -131,6 +135,14 @@ def upsert(
     if df.empty:
         log.info("upsert %s: empty batch, nothing to do", table)
         return 0
+    # Lineage columns are filled here; any other column missing from the batch would be NULL.
+    table_cols = {r[1] for r in con.execute(f"PRAGMA table_info('{table}')").fetchall()} - {
+        "_ingested_at",
+        "_run_id",
+    }
+    if set(df.columns) != table_cols:
+        missing, extra = sorted(table_cols - set(df.columns)), sorted(set(df.columns) - table_cols)
+        raise ValueError(f"{table}: batch columns differ; missing {missing}, unexpected {extra}")
     batch = df.drop_duplicates(subset=key_cols, keep="last")
     value_cols = [c for c in batch.columns if c not in key_cols]
     match = " AND ".join(f"t.{c} = b.{c}" for c in key_cols)
@@ -146,7 +158,7 @@ def upsert(
             f"LEFT JOIN {table} AS t ON {match}"
         )
         if con.execute("SELECT count(*) FROM _merged").fetchone()[0] != len(batch):
-            raise ValueError(f"{table} holds duplicate rows for a natural key {key_cols}")
+            raise DuplicateKeyError(f"{table} holds duplicate rows for a natural key {key_cols}")
         con.execute(
             "CREATE OR REPLACE TEMP TABLE _changed AS SELECT * FROM _merged AS b WHERE NOT EXISTS "
             f"(SELECT 1 FROM {table} AS t WHERE {match} AND {same or 'true'})"
