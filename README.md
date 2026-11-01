@@ -55,14 +55,16 @@ actual" at every lead time. NESO's published forecast scores <!-- bt:neso_mae --
 forecast-not-observed weather, train-before-test) are enforced by tests. Details:
 [`docs/backtest.md`](docs/backtest.md).
 
-**Live so far (`lgbm-direct-v4`, 19–26 Oct 2026).** Over 103 forecasts and 8,338 scored
-half-hours, our MAE is **17.0 gCO₂/kWh against NESO's 21.7**. We are ahead at every lead band,
-by most at 12–24 h (15.2 vs 24.2) and least at 0–6 h (15.3 vs 16.4). Our bias is +3.8 (a little
-high, and not drifting); NESO's is −14.6. Picking the greenest 3 h window from each fully scored
-forecast, ours lands 3.7 gCO₂/kWh above the true best on average, NESO's 12.5. Caveats: 8 days is
-too few for a confidence interval (`analysis/live_bias.py` needs 45), and one day can swing it.
-22 Oct was our worst day (MAE 28.1) because the weather forecast issued two days earlier had the
-wind dropping too soon; later forecasts got the wind right and our error fell with them.
+**Live so far (`lgbm-direct-v4`, 20 Oct – 1 Nov 2026).** Over 186 forecasts and 16,398 scored
+half-hours, our MAE is **16.2 gCO₂/kWh against NESO's 28.1**. We are ahead at every lead band,
+by most at 12–24 h (14.7 vs 30.1) and least at 0–6 h (14.7 vs 17.4). At 24–48 h our live MAE
+(18.0) is lower than the backtest's (19.6), so the backtest's long-lead weather doesn't look
+optimistic. Our bias is −1.0; NESO's is −22.9. Picking the greenest 3 h window from each fully
+scored forecast, ours lands 4.3 gCO₂/kWh above the true best on average, NESO's 16.0. Caveats:
+13 days is too few for a confidence interval (`analysis/live_bias.py` needs 45), and single days
+swing it: our daily bias ran from −21.0 to +26.2. 22 Oct was our worst day (MAE 28.5) because
+the weather forecast issued two days earlier had the wind dropping too soon. On 28–30 Oct both
+forecasts came in too low, NESO by more (MAE 42–50 vs our 15–23); the cause isn't checked yet.
 
 **NESO forecasts as inputs.** NESO's embedded wind/solar forecasts (always the vintage published
 before each forecast) cut the backtest MAE from <!-- bt:previous_model_mae -->27.0<!-- /bt --> to <!-- bt:v3_model_mae -->20.9<!-- /bt -->. NESO's transmission wind
