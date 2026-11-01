@@ -58,10 +58,18 @@ _resource_cache: dict[str, list[dict]] = {}
 _fields_cache: dict[str, set[str]] = {}
 
 
+def _get(client: ApiClient, action: str, params: dict) -> dict:
+    """A CKAN call whose body must say success: a 200 with success false is an error."""
+    payload = client.get_json(f"{API_URL}/{action}", params)
+    if not isinstance(payload, dict) or payload.get("success") is not True:
+        raise ValueError(f"NESO {action} did not report success: {str(payload)[:200]}")
+    return payload
+
+
 def _resources(client: ApiClient, package: str) -> list[dict]:
     """Datastore-backed resources of a dataset (resource ids change when NESO adds a year)."""
     if package not in _resource_cache:
-        payload = client.get_json(f"{API_URL}/package_show", {"id": package})
+        payload = _get(client, "package_show", {"id": package})
         _resource_cache[package] = [
             r for r in payload["result"]["resources"] if r.get("datastore_active")
         ]
@@ -70,9 +78,7 @@ def _resources(client: ApiClient, package: str) -> list[dict]:
 
 def _has_field(client: ApiClient, resource_id: str, field: str) -> bool:
     if resource_id not in _fields_cache:
-        payload = client.get_json(
-            f"{API_URL}/datastore_search", {"resource_id": resource_id, "limit": 0}
-        )
+        payload = _get(client, "datastore_search", {"resource_id": resource_id, "limit": 0})
         _fields_cache[resource_id] = {f["id"] for f in payload["result"]["fields"]}
     return field in _fields_cache[resource_id]
 
@@ -135,11 +141,11 @@ def _sql_rows(
             f'SELECT * FROM "{resource_id}" WHERE "{ts_col}" >= \'{a}\' AND "{ts_col}" < \'{b}\' '
             f'{horizon}ORDER BY "{ts_col}", "_id" LIMIT {PAGE_SIZE} OFFSET {offset}'
         )
-        page = client.get_json(f"{API_URL}/datastore_search_sql", {"sql": sql})["result"]["records"]
-        rows.extend(page)
-        if len(page) < PAGE_SIZE:
+        page = _get(client, "datastore_search_sql", {"sql": sql})["result"]["records"]
+        if not page:
             return rows
-        offset += PAGE_SIZE
+        rows.extend(page)
+        offset += len(page)  # not PAGE_SIZE: the server may cap a page below it
 
 
 def _utc(values) -> pd.Series:
@@ -250,5 +256,7 @@ def fetch_wind_14d_forecast(client: ApiClient) -> pd.DataFrame:
     if len(ids) != 1:
         raise ValueError(f"expected one national 14-day wind resource, found {len(ids)}")
     sql = f'SELECT * FROM "{ids[0]}" ORDER BY "Datetime" LIMIT {PAGE_SIZE}'
-    records = client.get_json(f"{API_URL}/datastore_search_sql", {"sql": sql})["result"]["records"]
+    records = _get(client, "datastore_search_sql", {"sql": sql})["result"]["records"]
+    if len(records) >= PAGE_SIZE:
+        raise ValueError("14-day wind forecast truncated at the page size")
     return parse_wind_14d(records)

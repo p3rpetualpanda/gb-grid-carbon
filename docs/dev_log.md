@@ -569,3 +569,20 @@ and the baselines unchanged). README, showcase and the dashboard caption updated
 - `dim_region` id check is warn-only; the mix-gap test stops one day short of the latest period.
 - MotherDuck columns match `DDL` for all 13 tables, so the strict column check cannot reject a
   real batch.
+
+## 1 Nov 2026: small items
+
+- NESO calls now require `success: true` in the CKAN body (a 200 with `success: false` used to fail
+  later on a missing key, or not at all). Still a `ValueError`, so it stays a soft skip and the
+  health job counts repeats.
+- `_sql_rows` stops on an empty page and advances the offset by the rows received, not by
+  `PAGE_SIZE`. Before, a server cap below 30,000 rows would have looked like a short last page and
+  silently dropped the rest. Checked live: the wind archive returned 40,000 rows for one query, and
+  the response has no truncation flag, so the empty-page rule is the only safe stop. Cost: one
+  extra request per resource. The 14-day fetch is a single query and now raises if it fills a page.
+- Window-regret table: a note says a flat forecast (Last known actual) ties every block and a tie
+  picks the earliest, so that row's 57.5 means "always the first block". Not re-scored.
+- `tune_decay.py` called the later months "last 6", but the split is the first 6 calendar months
+  and the rest, which can be 7. Renamed to "later mo"; docs/decay_tuning.md updated by hand, numbers
+  unchanged. Dev_log entries above are left as written.
+- Not done: regional dbt gap flags (model change, needs a plan first).

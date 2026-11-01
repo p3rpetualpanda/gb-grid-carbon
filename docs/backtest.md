@@ -71,6 +71,8 @@ at long leads to be somewhat higher than this backtest.
 **Greenest 3 h window.** For each forecast, pick the cleanest 3 h block it predicts and compare
 the actual intensity in that block with the truly cleanest block. Regret is the gap in gCO₂/kWh
 (0 = picked the best block); a forecast that is off by a constant has zero regret.
+A forecast that is flat (Last known actual) ties every block, and a tie picks the earliest one,
+so its row measures "always the first block of the day".
 
 |  | mean regret | share within 5 of best |
 | --- | --- | --- |
