@@ -459,3 +459,16 @@ improve after about 2 weeks.
 Backtest re-run with decay 2: headline MAE 18.7 -> 18.6 (v3 20.9 -> 20.8, v2 27.0 -> 26.9; NESO
 and the baselines unchanged). README, showcase and the dashboard caption updated from
 `docs/backtest_results.json`.
+
+## 1 Nov 2026: review follow-ups
+
+- **Decay grid widened.** The first grid started at 2, the winner, so the optimum could have lain
+  below it. Adding 1 and 1.5: 1.5, 2 and 3 tie on the first 6 months (17.78), 1 is worse (17.80),
+  and on the last 6 months 2 is best at leads 1-4 (14.78 against 14.86 at 1.5 and 15.29 at 1).
+  Decay 2 stands. `tune_decay.py` now scores every row, as the headline backtest does (rows with
+  no last actual get no blend), and no longer relies on a `fillna` on a float column.
+- **A failed snapshot no longer stalls the loads.** `incremental` still takes the snapshots first,
+  but if one fails it runs the dataset loads and then raises, so the run still ends failed.
+- **Not changed, on purpose:** `model_version` stays `lgbm-direct-v4` after the decay change (the
+  cutover date is recorded above instead); `predict_live` still formats the issue time into its
+  weather SQL (it is a database timestamp, not input).
