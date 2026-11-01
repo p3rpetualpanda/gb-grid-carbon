@@ -10,7 +10,7 @@
 An automated pipeline that collects half-hourly GB grid carbon intensity, generation mix,
 weather and NESO's wind and solar forecasts every few hours, models and tests it with dbt,
 forecasts the next 48 hours with LightGBM, scores that forecast live against the official one,
-and serves a Streamlit dashboard. About 9.1M rows since 2017 (6.0M of them NESO embedded forecasts from 2022), all on free tiers.
+and serves a Streamlit dashboard. About 9.3M rows since 2017 (6.0M of them NESO embedded forecasts from 2022), all on free tiers.
 
 ```mermaid
 flowchart LR
@@ -88,8 +88,9 @@ shows the latest intensity, the last 36 h of actuals against what our model and 
 for them (each from its best-scoring lead time), the next 48 h forecast with a band of its typical live error, NESO's
 wind and solar outlook, and what is powering the grid (latest half-hour and the last 7 days).
 Other tabs: "when is it greenest?" (the cleanest start time for a task of any length from the
-live forecast, plus a month × hour heatmap), trends since 2017, regions, and the live forecast
-track record against NESO.
+live forecast, plus a month × hour heatmap), trends since 2017 (headline fall and a yearly
+table, whole years only), regions (forecast intensity, 30-day average), and the live forecast
+track record against NESO, labelled with the model version. Numbers on charts show 2 decimal places.
 
 ## Engineering highlights
 
@@ -129,7 +130,7 @@ Found by running against the real APIs, not by unit tests (full write-up in
 |---|---|---|
 | 1 | Scaffold, tooling, CI | ✅ Done |
 | 2 | Live API exploration → `docs/data_dictionary.md` | ✅ Done |
-| 3 | Extraction + idempotent loading + backfill (offline tests; 144 pass across the repo now) | ✅ Done |
+| 3 | Extraction + idempotent loading + backfill (offline tests; 146 pass across the repo now) | ✅ Done |
 | 4 | MotherDuck cloud warehouse (same code, `DB_TARGET=motherduck`) | ✅ Done |
 | 5 | dbt models (staging → marts) + 28 data tests | ✅ Done |
 | 6 | Scheduled GitHub Actions pipeline (every 3 h) + dbt docs site | ✅ Live |
