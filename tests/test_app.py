@@ -192,3 +192,24 @@ def test_example_is_the_latest_fully_scored_issue():
         "issued_at, period_from, model_gco2_kwh, neso_gco2_kwh, actual_gco2_kwh", "*"
     )).df()  # fmt: skip
     assert set(example["issued_at"]) == {pd.Timestamp("2024-01-01")}
+
+
+def test_annual_summary_flags_part_years_and_decarbonisation_skips_them():
+    annual = pd.DataFrame(
+        {
+            "year": [2026, 2017, 2018, 2019],
+            "g": [100.0, 300.0, 250.0, 200.0],
+            "n": [9000, 3000, 17500, 17400],
+        }
+    )
+    summary = app.annual_summary(annual)
+    assert summary.year.tolist() == [2017, 2018, 2019, 2026]
+    assert summary.full.tolist() == [False, True, True, False]
+    assert app.decarbonisation(summary) == (2018, 2019, pytest.approx(0.2))
+    assert app.decarbonisation(summary.iloc[:2]) is None  # one full year at most
+
+
+def test_model_label_strips_the_fallback_suffix():
+    assert app.model_label("lgbm-direct-v4.1") == ("lgbm-direct-v4.1", False)
+    assert app.model_label("lgbm-direct-v4.1-fallback") == ("lgbm-direct-v4.1", True)
+    assert app.model_label(None) == ("unknown", False)

@@ -63,6 +63,33 @@ def typical_day(typical: pd.DataFrame) -> pd.DataFrame:
     return (sums["gn"] / sums["n"]).unstack().reindex(columns=range(48)).dropna()
 
 
+FULL_YEAR_MIN_N = 16_644  # 95% of a year's 17,520 half-hours: fewer is a part year
+
+
+def annual_summary(annual: pd.DataFrame, min_n: int = FULL_YEAR_MIN_N) -> pd.DataFrame:
+    """Yearly rows (year, g, n, wind, gas, coal) with a `full` flag. A part year (the first one,
+    the current one) must not be compared with whole years."""
+    return annual.assign(full=annual["n"] >= min_n).sort_values("year").reset_index(drop=True)
+
+
+def decarbonisation(summary: pd.DataFrame) -> tuple[int, int, float] | None:
+    """First full year, last full year and the fall in average intensity between them, or None
+    with under two full years."""
+    full = summary[summary["full"]]
+    if len(full) < 2:
+        return None
+    first, last = full.iloc[0], full.iloc[-1]
+    return int(first.year), int(last.year), float(1 - last.g / first.g)
+
+
+def model_label(version: str | None) -> tuple[str, bool]:
+    """The model version without the fallback suffix, and whether the issue ran in fallback mode
+    (base features only, because a NESO or wind-point input was missing)."""
+    if not version:
+        return "unknown", False
+    return version.removesuffix("-fallback"), version.endswith("-fallback")
+
+
 MAX_TASK_H = 8  # the longest task length offered
 
 
@@ -232,6 +259,10 @@ def main() -> None:
         where issued_at = (select max(issued_at) from marts.fct_model_vs_official)
         order by period_from
     """)
+    issue_meta = q(
+        "select max(issued_at) as t, arg_max(model_version, issued_at) as v "
+        "from marts.fct_model_vs_official"
+    ).iloc[0]
     forecast = best_forecast(latest_issue)  # the whole issue, for the chart
     advice, ahead = upcoming(forecast, pd.Timestamp.now("UTC"))  # windows from now on
     span = f"next {ahead:.0f} h" if ahead >= MAX_TASK_H else "latest forecast"
@@ -301,6 +332,13 @@ def main() -> None:
             start, mean = greenest_window(advice, 3)
             c2.metric(f"Cleanest 3 h in the {span} starts", hhmm(start))
             c3.metric("Forecast intensity in that window", f"{mean:.0f} gCO₂/kWh")
+            version, fallback = model_label(issue_meta.v)
+            st.caption(
+                f"Latest forecast issued {hhmm(issue_meta.t)} UK time by model {version}"
+                + (" (fallback: base inputs only, a NESO or wind input was missing)"
+                   if fallback else "")
+                + "."
+            )  # fmt: skip
             past = q("""
                 select period_from, actual_gco2_kwh from marts.fct_grid_halfhourly
                 where period_from > (select max(period_from) from marts.fct_grid_halfhourly)
@@ -347,6 +385,7 @@ def main() -> None:
                 hovermode="x unified",
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             )
+            fig.update_yaxes(hoverformat=".2f")
             st.plotly_chart(fig, width="stretch")
             bands = scored[scored.band != "All"].set_index("band")
             if bands.empty:
@@ -393,6 +432,7 @@ def main() -> None:
                     hovermode="x unified",
                     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
                 )
+                fig.update_yaxes(hoverformat=".2f")
                 st.plotly_chart(fig, width="stretch")
                 st.caption("More wind and sun means lower carbon. Each line is NESO's newest "
                            "forecast for that half-hour.")  # fmt: skip
@@ -415,13 +455,13 @@ def main() -> None:
             now_mix = mix.iloc[-1]
             shares = now_mix[list(FUEL_COLOURS)].astype(float).sort_values()
             c1, c2 = st.columns([1, 2])
-            fig = px.bar(x=shares.values, y=shares.index, orientation="h", text_auto=".0f",
+            fig = px.bar(x=shares.values, y=shares.index, orientation="h", text_auto=".2f",
                          color=shares.index, color_discrete_map=FUEL_COLOURS,
                          labels=dict(x="% of generation", y=""))  # fmt: skip
             fig.update_layout(title=f"Now ({hhmm(now_mix.period_from)})", showlegend=False)
             fig.update_xaxes(range=[0, shares.max() * 1.2])  # room for the outside labels
             fig.update_traces(textposition="outside", cliponaxis=False,
-                              hovertemplate="%{y}: %{x:.1f}%<extra></extra>")  # fmt: skip
+                              hovertemplate="%{y}: %{x:.2f}%<extra></extra>")  # fmt: skip
             c1.plotly_chart(fig, width="stretch")
             long = mix.melt("period_from", var_name="fuel", value_name="pct")
             long["period_from"] = uk(long["period_from"])
@@ -430,6 +470,7 @@ def main() -> None:
                           category_orders=dict(fuel=list(FUEL_COLOURS)),
                           labels=dict(period_from="", pct="% of generation", fuel=""))  # fmt: skip
             fig.update_layout(title="Last 7 days", hovermode="x unified")
+            fig.update_yaxes(hoverformat=".2f")
             c2.plotly_chart(fig, width="stretch")
             st.caption("Other = biomass, hydro, coal and other sources. Shares of GB generation "
                        "(Carbon Intensity API).")  # fmt: skip
@@ -504,7 +545,7 @@ def main() -> None:
                 category_orders=dict(kind=list(kinds.values())),
                 labels=dict(time="UK time", g="gCO₂/kWh", kind=""),
             )
-            fig.update_traces(line_width=2, hovertemplate="%{x}: %{y:.0f} gCO₂/kWh")
+            fig.update_traces(line_width=2, hovertemplate="%{x}: %{y:.2f} gCO₂/kWh")
             start = day_windows(day, task_h).idxmin()
             end = start + round(task_h * 2) - 1
             for x0, x1 in [(start, end)] if end < 48 else [(start, 47), (0, end - 48)]:
@@ -536,7 +577,7 @@ def main() -> None:
                 labels=dict(x="UK time", y="", color="gCO₂/kWh"),
             )
             fig.update_traces(
-                xgap=1, ygap=2, hovertemplate="%{y} %{x}: %{z:.0f} gCO₂/kWh<extra></extra>"
+                xgap=1, ygap=2, hovertemplate="%{y} %{x}: %{z:.2f} gCO₂/kWh<extra></extra>"
             )
             fig.update_layout(
                 title="Every month: average intensity by time of day (darker = dirtier)",
@@ -566,6 +607,18 @@ def main() -> None:
             )
 
     with trends_tab:
+        annual = annual_summary(
+            q("""
+            select year, avg(actual_gco2_kwh) as g, count(actual_gco2_kwh) as n,
+                   avg(wind_pct) as wind, avg(gas_pct) as gas, avg(coal_pct) as coal
+            from marts.fct_grid_halfhourly group by year
+        """)
+        )
+        fall = decarbonisation(annual)
+        if fall:
+            y0, y1, drop = fall
+            st.metric(f"Average intensity, {y0} to {y1}", f"{drop:.0%} lower",
+                      help="Whole years only, average of actual half-hourly intensity")  # fmt: skip
         daily = q("select date_local, mean_actual_gco2_kwh as g from marts.agg_daily order by 1")
         daily["avg30"] = daily.g.rolling(30, min_periods=15).mean()
         fig = go.Figure()
@@ -573,7 +626,26 @@ def main() -> None:
                         line=dict(color=BLUE, width=2))  # fmt: skip
         fig.update_layout(title="GB carbon intensity since 2017 (30-day rolling average)",
                           yaxis_title="gCO₂/kWh", hovermode="x unified")  # fmt: skip
+        fig.update_yaxes(hoverformat=".2f")
         st.plotly_chart(fig, width="stretch")
+        table = annual.assign(
+            year=annual.year.astype(str) + annual.full.map({True: "", False: " (part year)"})
+        )
+        g = st.column_config.NumberColumn
+        st.dataframe(
+            table, hide_index=True, width="stretch",
+            column_order=["year", "g", "wind", "gas", "coal"],
+            column_config={
+                "year": "Year",
+                "g": g("Average gCO₂/kWh", format="%.2f"),
+                "wind": g("Wind %", format="%.2f"),
+                "gas": g("Gas %", format="%.2f"),
+                "coal": g("Coal %", format="%.2f"),
+            },
+        )  # fmt: skip
+        st.caption(f"Yearly averages of half-hourly actuals. Part years are not comparable. "
+                   f"Confidence intervals and method: [docs/findings.md]({REPO}"
+                   "/blob/main/docs/findings.md).")  # fmt: skip
 
     with regions_tab:
         reg = q("""
@@ -584,12 +656,21 @@ def main() -> None:
             group by 1 order by g
         """)
         fig = px.bar(reg, x="g", y="region", orientation="h", color_discrete_sequence=[BLUE],
-                     text_auto=".0f", labels=dict(g="gCO₂/kWh", region=""))  # fmt: skip
+                     text_auto=".2f", labels=dict(g="gCO₂/kWh", region=""))  # fmt: skip
         fig.update_layout(title="Average forecast intensity by region, last 30 days",
                           yaxis=dict(autorange="reversed"))  # fmt: skip
         # outside: plotly hides labels on zero-width bars (North Scotland is ~0)
-        fig.update_traces(textposition="outside", textangle=0, cliponaxis=False)
+        fig.update_traces(
+            textposition="outside",
+            textangle=0,
+            cliponaxis=False,
+            hovertemplate="%{y}: %{x:.2f} gCO₂/kWh<extra></extra>",
+        )
         st.plotly_chart(fig, width="stretch")
+        through = q("select max(period_from) as t from marts.fct_regional_halfhourly").t.iloc[0]
+        st.caption(f"Forecast intensity, not measured: NESO publishes no regional actuals. "
+                   f"Average of the 30 days to {uk(through):%d %b %Y}, in the 14 distribution "
+                   "regions (England, Scotland, Wales and GB totals excluded).")  # fmt: skip
 
     with accuracy_tab:
         st.subheader("How good is the forecast?")
@@ -607,6 +688,10 @@ def main() -> None:
                       help="Average distance between forecast and actual, high or low")  # fmt: skip
             c2.metric("NESO's forecast is typically off by", f"{overall.neso_mae:.0f} gCO₂/kWh")
             c3.metric("Half-hours where ours was closer", f"{overall.we_closer:.0f}%")
+            version, _ = model_label(issue_meta.v)
+            share = current["n"].sum() / overall.n if not current.empty else 0
+            st.caption(f"Latest model: {version}. It has scored {share:.0%} of these "
+                       f"{overall.n:,.0f} half-hours; the rest are earlier versions.")  # fmt: skip
             st.markdown(
                 f"Put simply: when we forecast, say, 150 gCO₂/kWh, the real figure usually lands "
                 f"within about **{overall.our_mae:.0f}** of that, which is roughly "
@@ -619,8 +704,8 @@ def main() -> None:
             for col, name, colour in (("our_mae", "Our forecast", ORANGE),
                                       ("neso_mae", "NESO's forecast", AQUA)):  # fmt: skip
                 fig.add_bar(x=bands.label, y=bands[col], name=name, marker_color=colour,
-                            text=bands[col].round(0), textposition="outside",
-                            hovertemplate="%{x}: off by %{y:.0f} gCO₂/kWh")  # fmt: skip
+                            text=bands[col], texttemplate="%{y:.2f}", textposition="outside",
+                            hovertemplate="%{x}: off by %{y:.2f} gCO₂/kWh")  # fmt: skip
             fig.update_layout(
                 title="Average miss by how far ahead (lower is better)",
                 yaxis_title="gCO₂/kWh",
@@ -646,6 +731,7 @@ def main() -> None:
                     hovermode="x unified",
                     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
                 )
+                fig.update_yaxes(hoverformat=".2f")
                 st.plotly_chart(fig, width="stretch")
                 st.caption("The most recent forecast whose whole 48 hours have now happened.")
 
