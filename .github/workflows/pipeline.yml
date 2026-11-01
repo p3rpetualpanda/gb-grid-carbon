@@ -1,15 +1,11 @@
 name: pipeline
 
-# Hourly. GitHub delays and skips many scheduled runs (at every 2 h, gaps were a median of
-# 4.4 h over 16-18 Oct), so ask hourly to get closer to every 2 h. Each run:
+# Triggered only by cron-job.org, every 3 h via the workflow_dispatch API (token: Actions
+# only). The GitHub schedule was removed 1 Nov to stay inside MotherDuck Lite's 10 h a month
+# of compute; it was also unreliable (gaps a median of 4.4 h at every 2 h, 16-18 Oct). Each run:
 # extract + load (incremental, with forecast snapshots) into MotherDuck,
 # check source freshness, rebuild and test the dbt models, and publish dbt docs to Pages.
-# cron-job.org also triggers it every 2 h via the workflow_dispatch API (token: Actions only).
-# GitHub disables schedules in public repos after 60 days without commits: re-enable from
-# the Actions tab if that happens.
 on:
-  schedule:
-    - cron: "17 * * * *"  # :17 avoids the busy top of the hour; start times can lag
   workflow_dispatch:
 
 concurrency:
