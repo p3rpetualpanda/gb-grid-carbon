@@ -142,3 +142,11 @@ def test_tracked_run_keeps_warnings_on_success(con):
         run.setdefault("warnings", []).append("neso_wind_forecast: RuntimeError: down")
     status, err = con.execute("SELECT status, error FROM meta.pipeline_runs").fetchone()
     assert status == "success" and "neso_wind_forecast" in err
+
+
+def test_upsert_refuses_a_table_that_already_holds_duplicate_keys(con):
+    upsert(con, TABLE, periods(0, 1, 5), KEY, "r1")
+    con.execute(f"INSERT INTO {TABLE} SELECT * FROM {TABLE}")  # a past bug left two rows per key
+    with pytest.raises(ValueError, match="duplicate"):
+        upsert(con, TABLE, periods(0, 1, 6), KEY, "r2")
+    assert len(table(con)) == 4  # rolled back, nothing lost

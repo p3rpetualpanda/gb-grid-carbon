@@ -434,3 +434,9 @@ def test_predict_live_warns_on_missing_base_inputs(monkeypatch, caplog):
     monkeypatch.setattr(fc, "load_history", lambda con: (gappy, wx_hist[wx_hist.index < issue]))
     fc.predict_live(con, issue.to_pydatetime())
     assert "last_actual" in caplog.text
+
+
+def test_model_version_names_the_blend_decay():
+    # Live forecasts from different blends must not share a label (decay 6 ran as plain v4).
+    assert fc.MODEL_VERSION == "lgbm-direct-v4.1"
+    assert fc.FALLBACK_VERSION == "lgbm-direct-v4.1-fallback"

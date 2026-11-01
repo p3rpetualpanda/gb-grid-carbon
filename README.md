@@ -76,7 +76,7 @@ targets lack it.
 wind-farm clusters plus the 3 original wind points), each a separate input, cut it again to the
 figure above: a GB average hides calm in one cluster while another blows. If NESO's feed stalls or
 a wind point is missing from the weather snapshot, the pipeline falls back to the model without
-those inputs and labels the forecasts `lgbm-direct-v4-fallback`. A NESO portal failure or stale
+those inputs and labels the forecasts `lgbm-direct-v4.1-fallback`. A NESO portal failure or stale
 NESO data only warns; it never stops the scheduled run.
 
 ## The dashboard
@@ -127,7 +127,7 @@ Found by running against the real APIs, not by unit tests (full write-up in
 |---|---|---|
 | 1 | Scaffold, tooling, CI | ✅ Done |
 | 2 | Live API exploration → `docs/data_dictionary.md` | ✅ Done |
-| 3 | Extraction + idempotent loading + backfill (offline tests; 126 pass across the repo now) | ✅ Done |
+| 3 | Extraction + idempotent loading + backfill (offline tests; 128 pass across the repo now) | ✅ Done |
 | 4 | MotherDuck cloud warehouse (same code, `DB_TARGET=motherduck`) | ✅ Done |
 | 5 | dbt models (staging → marts) + 25 data tests | ✅ Done |
 | 6 | Scheduled GitHub Actions pipeline (every 3 h) + dbt docs site | ✅ Live |

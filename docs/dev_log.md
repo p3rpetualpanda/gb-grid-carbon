@@ -472,3 +472,14 @@ and the baselines unchanged). README, showcase and the dashboard caption updated
 - **Not changed, on purpose:** `model_version` stays `lgbm-direct-v4` after the decay change (the
   cutover date is recorded above instead); `predict_live` still formats the issue time into its
   weather SQL (it is a database timestamp, not input).
+
+## 1 Nov 2026: the three items left from the review, done
+
+- **Model label `lgbm-direct-v4.1`** (fallback `lgbm-direct-v4.1-fallback`). Decay 2 changes the
+  forecasts, so they no longer share a label with the decay-6 ones. `lgbm-direct-v4` rows run to
+  the 1 Nov merge; `v4.1` rows start after it, so live error can be compared by label. The
+  dashboard picks the version of the issue it shows, so it needed no change.
+- **`predict_live` binds the issue time** as a query parameter instead of formatting it into SQL.
+- **`upsert` refuses duplicate stored keys.** If the join returns more rows than the batch, a
+  table already holds two rows for one key; it raises and rolls back instead of copying the
+  duplicate forward. Test added.

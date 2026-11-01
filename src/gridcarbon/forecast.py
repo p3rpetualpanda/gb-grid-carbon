@@ -25,9 +25,9 @@ ACTUAL_LAG = pd.Timedelta(hours=1)  # actuals publish late: never use the last h
 # half-hour of the day. Live runs issue at any half-hour; a fixed 6 h grid left (lead, slot)
 # combinations unseen and skewed live forecasts.
 ISSUE_EVERY = "390min"
-MODEL_VERSION = "lgbm-direct-v4"
+MODEL_VERSION = "lgbm-direct-v4.1"  # .1 = persistence decay 2 (v4 ran decay 6 until 1 Nov)
 # BASE_FEATURES only, when NESO or wind-point inputs are missing
-FALLBACK_VERSION = "lgbm-direct-v4-fallback"
+FALLBACK_VERSION = "lgbm-direct-v4.1-fallback"
 # Short leads lean on the last known actual: weight exp(-(lead-1)/decay). Decay chosen on the first
 # 6 backtest months, checked on the last 6: see docs/decay_tuning.md (analysis/tune_decay.py).
 PERSISTENCE_DECAY = 2
@@ -255,8 +255,9 @@ def predict_live(con, now: datetime) -> pd.DataFrame:
                 table="raw.weather_forecast_snapshots",
                 # Not after the issue: a later run's snapshot must not leak into this forecast.
                 where="where issued_at = (select max(issued_at) from "
-                f"raw.weather_forecast_snapshots where issued_at <= '{issue.isoformat()}')",
-            )
+                "raw.weather_forecast_snapshots where issued_at <= ?)",
+            ),
+            params=[issue.to_pydatetime()],
         )
         .df()
         .set_index("hour_utc")
