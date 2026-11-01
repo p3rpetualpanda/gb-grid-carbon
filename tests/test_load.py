@@ -150,3 +150,15 @@ def test_upsert_refuses_a_table_that_already_holds_duplicate_keys(con):
     with pytest.raises(ValueError, match="duplicate"):
         upsert(con, TABLE, periods(0, 1, 6), KEY, "r2")
     assert len(table(con)) == 4  # rolled back, nothing lost
+
+
+def test_upsert_refuses_a_batch_missing_a_table_column(con):
+    # A dropped column would otherwise be written as NULL for every row.
+    with pytest.raises(ValueError, match="intensity_index"):
+        upsert(con, TABLE, periods(0, 1, 5).drop(columns="intensity_index"), KEY, "r1")
+    assert table(con).empty
+
+
+def test_upsert_refuses_a_batch_with_an_unknown_column(con):
+    with pytest.raises(ValueError, match="surprise"):
+        upsert(con, TABLE, periods(0, 1, 5).assign(surprise=1), KEY, "r1")

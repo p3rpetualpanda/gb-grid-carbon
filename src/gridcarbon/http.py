@@ -51,7 +51,13 @@ class ApiClient:
     def get_json(self, url: str, params: dict[str, Any] | None = None) -> Any:
         retrying = Retrying(
             retry=retry_if_exception_type(
-                (RetryableHTTPError, requests.ConnectionError, requests.Timeout)
+                (
+                    RetryableHTTPError,
+                    requests.ConnectionError,
+                    requests.Timeout,
+                    requests.exceptions.ChunkedEncodingError,  # body cut off mid-transfer
+                    requests.exceptions.ContentDecodingError,
+                )
             ),
             stop=stop_after_attempt(self.max_attempts),
             wait=self.wait,
