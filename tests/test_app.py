@@ -223,3 +223,9 @@ def test_month_span_names_the_years_the_window_draws_on():
     assert app.month_span("November", t("2025-11-01", tz="UTC"), t("2026-11-01", tz="UTC")) == (
         "November 2025, plus the start of 2026"
     )
+
+
+def test_miss_sentence_states_the_tail_not_just_the_average():
+    text = app.miss_sentence(18.0, 120.0, 0.61, 39.3)
+    assert "**18** away" in text and "**15%**" in text
+    assert "**6 in 10**" in text and "**39 or more**" in text
