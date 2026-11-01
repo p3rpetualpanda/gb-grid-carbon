@@ -586,3 +586,16 @@ and the baselines unchanged). README, showcase and the dashboard caption updated
   and the rest, which can be 7. Renamed to "later mo"; docs/decay_tuning.md updated by hand, numbers
   unchanged. Dev_log entries above are left as written.
 - Not done: regional dbt gap flags (model change, needs a plan first).
+
+## 1 Nov 2026: regional gap test
+
+- `fct_regional_halfhourly` has one row per period and region and no time spine, so a missing
+  region leaves no row for a test to fail on. New warn-level test `assert_no_regional_gaps` counts
+  regions per half-hour from the latest regional period minus 7 days to minus 1 day and returns any
+  below 18 (14 DNO regions plus England, Scotland, Wales and GB).
+- Chose a test over an `is_missing` flag: a flag needs a spine cross join, which makes the table
+  dense and changes its grain, for a table the forecast does not read. The window is bounded
+  because early history has different coverage.
+- Checked: passes on the local warehouse, warns on a scratch copy with one region's row deleted,
+  and the same SQL on MotherDuck returns no rows (latest period 15:00 UTC). dbt test count 27 to 28.
+- Not done: dbt warnings are still not read by the `health` job.
