@@ -444,3 +444,18 @@ leakage; these are the loader fixes. Each has a test that failed first.
 too. It is now set per step on the six that connect to MotherDuck (incremental load, source
 freshness, dbt build, predict, score, docs generate). `DB_TARGET` and `DBT_TARGET` stay job-level.
 No offline test covers a workflow; checked by a manual `workflow_dispatch` run after merge.
+
+## 1 Nov 2026: persistence decay 6 -> 2
+
+`analysis/tune_decay.py` re-ran the choice from one unblended backtest. Chosen on the first 6
+months only (rule fixed beforehand): decay 2 (17.78 MAE against 17.93 at decay 6; 3 ties at the
+rounded value). Check on the last 6 months: 0-2 h MAE 14.8 against 16.2 at decay 6 and 17.7 with
+no blend; all leads 19.37 against 19.56. Decay 6 was slightly worse than no blend overall.
+The 19.1 -> 17.0 figure from 12 Oct does not reproduce and is not used any more. Live from the
+merge of this change; the model label stays `lgbm-direct-v4`, so compare live error before and
+after the merge date (`analysis/live_bias.py --since <date>`). Revert if 0-2 h live MAE does not
+improve after about 2 weeks.
+
+Backtest re-run with decay 2: headline MAE 18.7 -> 18.6 (v3 20.9 -> 20.8, v2 27.0 -> 26.9; NESO
+and the baselines unchanged). README, showcase and the dashboard caption updated from
+`docs/backtest_results.json`.
