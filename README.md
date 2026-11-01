@@ -126,7 +126,7 @@ Found by running against the real APIs, not by unit tests (full write-up in
 |---|---|---|
 | 1 | Scaffold, tooling, CI | ✅ Done |
 | 2 | Live API exploration → `docs/data_dictionary.md` | ✅ Done |
-| 3 | Extraction + idempotent loading + backfill (48 offline tests) | ✅ Done |
+| 3 | Extraction + idempotent loading + backfill (offline tests; 122 pass across the repo now) | ✅ Done |
 | 4 | MotherDuck cloud warehouse (same code, `DB_TARGET=motherduck`) | ✅ Done |
 | 5 | dbt models (staging → marts) + 25 data tests | ✅ Done |
 | 6 | Scheduled GitHub Actions pipeline (every 3 h) + dbt docs site | ✅ Live |

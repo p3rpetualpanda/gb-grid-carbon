@@ -171,6 +171,15 @@ def test_fetch_wind_queries_only_the_archive(client):
 
 
 @responses.activate
+def test_fetch_wind_fails_when_filtering_leaves_no_national_archive(client):
+    # NESO renames the national files so only the BMU one is left: fail, don't load nothing.
+    only_bmu = package(("wind-bmu", "Day Ahead Wind BMU Forecast", True))
+    responses.add(responses.GET, f"{neso.API_URL}/package_show", json=only_bmu)
+    with pytest.raises(ValueError, match="national"):
+        neso.fetch_wind_forecast(client, utc(2024, 1, 1), utc(2024, 1, 2))
+
+
+@responses.activate
 def test_fetch_fails_when_no_resource_has_vintages(client):
     responses.add(responses.GET, f"{neso.API_URL}/package_show", json=WIND_PACKAGE)
     add_fields(FIELDS | {"wind-hist": ["Datetime_GMT"]})

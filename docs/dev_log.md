@@ -405,3 +405,23 @@ generation fell 51.6% to 34.6% to 13.7% and gas rose 16.4% to 28.2% to 47.8% (qu
 - **Caveat:** one event; observed wind is the archive average over our points, not a per-farm
   measurement. Not tested: whether a model given a persistence-weighted wind correction would
   have done better.
+
+## 2026-11-01: loader safety (review findings)
+
+Three read-only reviews (security, silent failures, forecast leakage) found no exploit and no
+leakage; these are the loader fixes. Each has a test that failed first.
+- **A NULL in a batch no longer overwrites a stored value** (`load.upsert`). The old upsert
+  rewrote a row when any value differed, and NULL counted as different, so an API re-serving a
+  period with one variable missing (Open-Meteo returns single variables null; the 3-day look-back
+  re-fetches them) would erase the stored value. Now `coalesce(batch, stored)`; new non-NULL
+  values still replace. Applied to every table. Cost: a value a source genuinely retracts stays;
+  I found no source that does that (snapshots and model forecasts are keyed by issue time).
+  `test_unchanged_rows_keep_their_first_lineage` used to assert the overwrite and was rewritten.
+- **NESO wind resources:** if the BMU filter left no national resource, `_wind_resources` returned
+  nothing and the load logged 0 rows. It now raises.
+- **Snapshots run before the loads** in `incremental`. They can't be fetched later; a failed load
+  catches up through the next run's look-back. Trade-off: a snapshot failure now stops that
+  run's loads, which also catch up next run.
+- **Not changed:** optional-dataset failures still end in a green run. That is deliberate
+  (README, `Dataset.optional`, a test, and the dashboard reads `status='success'`); NESO freshness
+  stays warn-only because the forecast falls back without NESO and must still publish.

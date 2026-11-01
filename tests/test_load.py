@@ -78,13 +78,35 @@ def test_lineage_columns_are_filled(con):
 
 
 def test_unchanged_rows_keep_their_first_lineage(con):
-    upsert(con, TABLE, periods(0, 1, 1), KEY, "r1")
-    batch = periods(0, 1, 1)
-    batch.loc[1, "actual"] = None  # a null that stays null must also count as unchanged
-    upsert(con, TABLE, batch, KEY, "r2")
-    assert upsert(con, TABLE, batch, KEY, "r3") == 0
+    first = periods(0, 1, 1)
+    first.loc[1, "actual"] = None  # not published yet
+    upsert(con, TABLE, first, KEY, "r1")
+    assert upsert(con, TABLE, first, KEY, "r2") == 0  # a null that stays null is not a change
     runs = con.execute(f"SELECT _run_id FROM {TABLE} ORDER BY period_from").df()["_run_id"]
-    assert runs.tolist() == ["r1", "r2"]
+    assert runs.tolist() == ["r1", "r1"]
+
+
+def test_null_in_batch_keeps_the_stored_value(con):
+    upsert(con, TABLE, periods(0, 1, 5), KEY, "r1")
+    batch = periods(0, 1, 5)
+    batch.loc[1, "actual"] = None  # e.g. the API re-serves a period with its actual missing
+    assert upsert(con, TABLE, batch, KEY, "r2") == 0
+    assert table(con)["actual"].tolist() == [5, 5]
+    runs = con.execute(f"SELECT _run_id FROM {TABLE} ORDER BY period_from").df()["_run_id"]
+    assert runs.tolist() == ["r1", "r1"]
+
+
+def test_partial_null_weather_row_keeps_stored_variables_but_takes_new_ones(con):
+    key = ("time", "point_id")
+    row = {"time": T0, "point_id": "p1", "latitude": 51.0, "longitude": 0.0, "temperature_2m": 8.0,
+           "wind_speed_100m": 30.0, "shortwave_radiation": 10.0, "cloud_cover": 50.0}  # fmt: skip
+    upsert(con, "raw.weather_observed", pd.DataFrame([row]), key, "r1")
+    update = row | {"wind_speed_100m": float("nan"), "temperature_2m": 9.5}
+    assert upsert(con, "raw.weather_observed", pd.DataFrame([update]), key, "r2") == 1
+    got = con.execute(
+        "SELECT temperature_2m, wind_speed_100m, _run_id FROM raw.weather_observed"
+    ).fetchone()
+    assert got == (9.5, 30.0, "r2")  # the new value lands, the missing one keeps the old
 
 
 def test_unknown_table_rejected(con):
