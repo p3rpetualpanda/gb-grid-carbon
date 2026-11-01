@@ -18,7 +18,7 @@ flowchart LR
   B[Open-Meteo weather] --> E
   C[NESO Data Portal<br/>wind + solar forecasts] --> E
   E -->|idempotent upserts| R[(MotherDuck<br/>raw + meta)]
-  R --> D[dbt models<br/>+ 27 data tests]
+  R --> D[dbt models<br/>+ 28 data tests]
   D --> F[48h LightGBM forecast]
   F --> D
   D --> S[Streamlit dashboard]
@@ -131,7 +131,7 @@ Found by running against the real APIs, not by unit tests (full write-up in
 | 2 | Live API exploration → `docs/data_dictionary.md` | ✅ Done |
 | 3 | Extraction + idempotent loading + backfill (offline tests; 144 pass across the repo now) | ✅ Done |
 | 4 | MotherDuck cloud warehouse (same code, `DB_TARGET=motherduck`) | ✅ Done |
-| 5 | dbt models (staging → marts) + 27 data tests | ✅ Done |
+| 5 | dbt models (staging → marts) + 28 data tests | ✅ Done |
 | 6 | Scheduled GitHub Actions pipeline (every 3 h) + dbt docs site | ✅ Live |
 | 7 | Analysis & findings → [`docs/findings.md`](docs/findings.md) | ✅ Done |
 | 8 | 48h forecast, backtest, live scoring vs NESO → [`docs/backtest.md`](docs/backtest.md) | ✅ Live |

@@ -45,3 +45,5 @@ graphify-out/
 
 # uv lockfile: the project installs from pyproject.toml, not uv
 uv.lock
+
+tasks/
