@@ -122,6 +122,7 @@ def incremental(
                 snapshot_forecasts(con, client, now, run)
             except Exception as exc:
                 snapshot_error = exc
+                logging.getLogger(__name__).exception("forecast snapshot failed")
         for name in names:
             load_incremental(con, client, DATASETS[name], now, lookback, run)
         if snapshot_error:

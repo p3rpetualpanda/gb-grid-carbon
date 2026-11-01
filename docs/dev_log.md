@@ -483,3 +483,28 @@ and the baselines unchanged). README, showcase and the dashboard caption updated
 - **`upsert` refuses duplicate stored keys.** If the join returns more rows than the batch, a
   table already holds two rows for one key; it raises and rolls back instead of copying the
   duplicate forward. Test added.
+
+## 1 Nov 2026: honest wording after the ML review
+
+- The README said the weather rule was enforced by tests; it is not (only publication lag and
+  train-before-test are). Reworded, and the "backtest doesn't look optimistic" line softened:
+  13 live days are too few.
+- The decay selection is now described as it happened: 1.5, 2 and 3 tie on the first 6 months and
+  the tie was broken using the later months, so those are a check, not a clean holdout. The old
+  "19.1 to 17.0" claim is gone from the README and showcase. (An earlier entry here said
+  `tune_decay.py` no longer uses `fillna`; it no longer fills with a string, it fills a missing
+  last actual with the model.)
+- Reviewer findings not acted on yet: a stale-NESO guard that only fires after about a day, silent
+  averaging if a solar or temperature point is missing, and optional-dataset failures that stay
+  green (see next-steps.md).
+
+## 1 Nov 2026: snapshot errors logged, watchdog
+
+- **Snapshot failure is logged when a load also fails.** The deferred snapshot error from #45
+  was raised only if the loads succeeded; with a failing load, only the load's error showed. It is
+  now logged with its traceback the moment it happens.
+- **Watchdog workflow** (`.github/workflows/watchdog.yml`). Twice a day it reads the newest
+  successful `pipeline` run and fails if it is 7 h or older (two missed 3-hourly triggers); GitHub
+  emails the repo owner on a failed scheduled run. It reads run metadata only: no secrets, no
+  MotherDuck. Limit: GitHub's schedule is best-effort and paused after 60 days with no commit, so
+  cron-job.org failure notifications are a worthwhile second alert.

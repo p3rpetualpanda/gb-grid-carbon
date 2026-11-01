@@ -42,3 +42,17 @@ def test_incremental_still_loads_when_a_snapshot_fails(runner, monkeypatch):
     result = runner.invoke(cli.app, ["incremental"])
     assert result.exit_code != 0
     assert loaded
+
+
+def test_a_snapshot_failure_is_logged_even_if_a_load_fails_too(runner, monkeypatch, caplog):
+    # Otherwise the load's error is raised and the snapshot's disappears.
+    def snap_boom(*args, **kwargs):
+        raise RuntimeError("open-meteo is down")
+
+    def load_boom(*args, **kwargs):
+        raise RuntimeError("regional is down")
+
+    monkeypatch.setattr(cli, "snapshot_forecasts", snap_boom)
+    monkeypatch.setattr(cli, "load_incremental", load_boom)
+    runner.invoke(cli.app, ["incremental"])
+    assert "open-meteo is down" in caplog.text
