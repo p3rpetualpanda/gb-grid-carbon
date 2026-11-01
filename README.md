@@ -51,15 +51,17 @@ rolling-origin backtest (last run <!-- bt:run_date -->2026-11-01<!-- /bt -->) it
 **<!-- bt:improvement -->58%<!-- /bt --> better** than the best naïve baseline (<!-- bt:best_baseline_mae -->44.3<!-- /bt -->), and it beats "repeat the last
 actual" at every lead time. NESO's published forecast scores <!-- bt:neso_mae -->9.9<!-- /bt -->, but the API keeps only NESO's *final*, short-lead forecast, so the fair comparison is the
 **live track record**: both forecasts issued in the same pipeline run, scored when actuals arrive
-(`marts.fct_model_vs_official`, shown in the dashboard). Leakage rules (publication lag,
-forecast-not-observed weather, train-before-test) are enforced by tests. Details:
+(`marts.fct_model_vs_official`, shown in the dashboard). Two leakage rules (publication lag,
+train-before-test) are enforced by tests. The weather rule (forecast, never observed) is by
+construction and untested; training weather is Open-Meteo's historical forecast, which is closer
+to a short-range forecast than a true 48 h one. Details:
 [`docs/backtest.md`](docs/backtest.md).
 
 **Live so far (`lgbm-direct-v4`, 20 Oct – 1 Nov 2026).** Over 186 forecasts and 16,398 scored
 half-hours, our MAE is **16.2 gCO₂/kWh against NESO's 28.1**. We are ahead at every lead band,
 by most at 12–24 h (14.7 vs 30.1) and least at 0–6 h (14.7 vs 17.4). At 24–48 h our live MAE
-(18.0) is lower than the backtest's (19.6), so the backtest's long-lead weather doesn't look
-optimistic. Our bias is −1.0; NESO's is −22.9. Picking the greenest 3 h window from each fully
+(18.0) is lower than the backtest's (19.6), but 13 days is too few to say the backtest's
+long-lead weather is not optimistic. Our bias is −1.0; NESO's is −22.9. Picking the greenest 3 h window from each fully
 scored forecast, ours lands 4.3 gCO₂/kWh above the true best on average, NESO's 16.0. Caveats:
 13 days is too few for a confidence interval (`analysis/live_bias.py` needs 45), and single days
 swing it: our daily bias ran from −21.0 to +26.2. 22 Oct was our worst day (MAE 28.5) because
@@ -112,9 +114,9 @@ Found by running against the real APIs, not by unit tests (full write-up in
   ~170 for 13:30 when the last actual was 88 (it turned out to be 86). Diagnosis: a train/serve
   skew (training issue times on a fixed 6 h grid; fixed with a 6.5 h grid that cycles through
   every half-hour), plus the model under-weighting the latest actual at very short leads. A
-  persistence blend was tuned on half the backtest and checked on the other half: 0–2 h error
-  fell from 19.1 to 17.0 (decay 6; a 1 Nov re-check
-  found decay 2 better and it is now live, see docs/decay_tuning.md).
+  persistence blend was added. Its first tuning (decay 6, quoted then as 0–2 h error 19.1 to
+  17.0) did not reproduce on 1 Nov. The re-check (docs/decay_tuning.md) found decay 2 better and
+  it is now live: last-6-month 0–2 h MAE 14.8, against 16.2 at decay 6 and 17.7 with no blend.
 - **GitHub skipped half the scheduled runs.** At "every 2 hours", GitHub started only 12 of 26
   scheduled runs over 16–18 Oct (median gap 4.4 h). An external scheduler (cron-job.org) now
   calls the workflow-dispatch API every 3 hours with a token scoped to this repo's Actions only,
@@ -127,7 +129,7 @@ Found by running against the real APIs, not by unit tests (full write-up in
 |---|---|---|
 | 1 | Scaffold, tooling, CI | ✅ Done |
 | 2 | Live API exploration → `docs/data_dictionary.md` | ✅ Done |
-| 3 | Extraction + idempotent loading + backfill (offline tests; 128 pass across the repo now) | ✅ Done |
+| 3 | Extraction + idempotent loading + backfill (offline tests; 129 pass across the repo now) | ✅ Done |
 | 4 | MotherDuck cloud warehouse (same code, `DB_TARGET=motherduck`) | ✅ Done |
 | 5 | dbt models (staging → marts) + 25 data tests | ✅ Done |
 | 6 | Scheduled GitHub Actions pipeline (every 3 h) + dbt docs site | ✅ Live |

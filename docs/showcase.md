@@ -87,7 +87,7 @@ naïve baselines (<!-- bt:improvement -->58%<!-- /bt --> better) and to be hones
 On day one the live forecast said ~170 when the last actual was 88 (the truth was 86). Two causes:
 a train/serve skew (training issue times only covered 4 times of day, fixed with a 6.5 h grid
 that cycles through all 48 half-hours) and under-use of the latest actual at very short leads
-(fixed with a persistence blend tuned on half the backtest and validated on the other half).
+(fixed with a persistence blend; re-tuned on 1 Nov, see docs/decay_tuning.md: decay 2, last-6-month 0-2 h MAE 14.8 against 17.7 with no blend).
 
 **What would you change for a real company / 100× the data?**
 Incremental dbt models, an orchestrator with retries and alerting (Dagster/Airflow), a cloud

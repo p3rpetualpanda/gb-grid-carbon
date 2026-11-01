@@ -1,0 +1,33 @@
+name: watchdog
+
+# Backstop for the cron-job.org trigger: fails (GitHub emails the repo owner) when the pipeline
+# has not succeeded for 7 h, i.e. two missed 3-hourly triggers. Reads run metadata only; no
+# MotherDuck access and no secrets. shortcut: GitHub's own schedule is best-effort and is
+# paused after 60 days without a commit, so this is a second line, not the only alert.
+on:
+  schedule:
+    - cron: "40 7,19 * * *"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Newest successful pipeline run is recent
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MAX_AGE_HOURS: "7"
+        run: |
+          last=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow pipeline.yml \
+            --status success --limit 1 --json updatedAt --jq '.[0].updatedAt')
+          if [ -z "$last" ]; then echo "::error::no successful pipeline run found"; exit 1; fi
+          age=$(( ( $(date +%s) - $(date -d "$last" +%s) ) / 3600 ))
+          echo "last successful pipeline run: $last (${age} h ago)"
+          if [ "$age" -ge "$MAX_AGE_HOURS" ]; then
+            echo "::error::pipeline has not succeeded for ${age} h (limit ${MAX_AGE_HOURS} h)"
+            exit 1
+          fi
