@@ -599,3 +599,17 @@ and the baselines unchanged). README, showcase and the dashboard caption updated
 - Checked: passes on the local warehouse, warns on a scratch copy with one region's row deleted,
   and the same SQL on MotherDuck returns no rows (latest period 15:00 UTC). dbt test count 27 to 28.
 - Not done: dbt warnings are still not read by the `health` job.
+
+## 1 Nov 2026: NESO_LAG measured, live figures reconciled
+
+- `NESO_LAG` (30 min, `forecast.latest_vintage`) is the assumed delay before a NESO forecast
+  vintage counts as known. Measured publication lag: wind archive ~8 s, 14-day wind ~45 s. The
+  embedded hourly forecast (~:54 UTC) did not show a new vintage in the polling window, so its lag
+  is unresolved (possibly ~33 min).
+- Sensitivity: backtest re-scored with a lag of 30, 60 and 120 min gives MAE 18.76, 18.99, 18.88
+  (blend off, stale local warehouse, 129,167 predictions). The largest move is 0.22, so the
+  constant stays at 30 min. Not changed.
+- Live record, two windows that look like a clash: README says v4 16.2 vs NESO 28.1 (186 forecasts,
+  closed 1 Nov); the dashboard "All" row pools v2, v3 and v4 from 12 Oct: 17.94 vs 27.85 (245
+  forecasts, 22,056 half-hours). v4 alone now reads 16.27 vs 27.93 (199 forecasts, queried on
+  MotherDuck). No number was wrong; the windows differ.
