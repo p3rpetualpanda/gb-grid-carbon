@@ -613,3 +613,13 @@ and the baselines unchanged). README, showcase and the dashboard caption updated
   closed 1 Nov); the dashboard "All" row pools v2, v3 and v4 from 12 Oct: 17.94 vs 27.85 (245
   forecasts, 22,056 half-hours). v4 alone now reads 16.27 vs 27.93 (199 forecasts, queried on
   MotherDuck). No number was wrong; the windows differ.
+
+## 1 Nov 2026: app context lines and 2 decimal places
+
+- Chart numbers (labels and hover) show 2 decimal places; headline cards stay whole numbers.
+- Now: a line gives the forecast issue time and model version. Trends: headline fall 2018 to 2025
+  and a yearly table, computed from `fct_grid_halfhourly`; a year with under 95% of its
+  half-hours (2017, 2026) is labelled part year and excluded from the headline. Regions: caption
+  says forecast not measured, 30-day average, 14 regions. Accuracy: latest model version and how
+  much of the scored record it covers (v4.1 had none yet, so the caption says so, #56).
+- Left for after the interview: eight more additions, ordered in `tasks/app-plan.md` (not committed).
