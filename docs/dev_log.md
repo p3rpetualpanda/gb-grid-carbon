@@ -383,3 +383,25 @@ Nothing to fix in the model; it is the cost of 2-day-ahead wind forecasts.
 - **Not explained yet:** 28-30 Oct, both forecasts were too low (our bias -21.0 to -4.6, NESO's
   -42 to -48). Check before the 8 Nov write-up.
 - **Caveat:** 13 days, no confidence interval until 45.
+
+## 2026-11-01: why both forecasts ran low on 28-30 Oct
+
+**A wind collapse, not a model fault.** Daily mean actual intensity went 80 (27 Oct), 133 (28th),
+209 (29th). Mean 100 m wind at the 15 points fell 40.8 to 28.2 to 16.0 km/h; wind's share of
+generation fell 51.6% to 34.6% to 13.7% and gas rose 16.4% to 28.2% to 47.8% (queried from
+`raw.weather_observed` and `marts.fct_grid_halfhourly`).
+- **The weather forecast was too windy.** The 36 h-ahead forecast wind was 37.2 against 28.2 observed
+  on 28 Oct (+9.0). On the 29th the gap was only +3.3, but at 16 km/h intensity is very sensitive
+  to wind, and our 24-48 h bias was still -19.6.
+- **It reached short leads too.** On 28 Oct our 0-6 h bias was -16.6, so the drop came faster than
+  the latest actuals could correct. By 30 Oct short-lead bias was back to +1.5 to +4.1; the 24-48 h
+  band stayed at -11.7.
+- **NESO missed by more.** Its bias was -42 to -60 at 6-48 h on 28-29 Oct, against ours of -11 to -24.
+- **Same cause as 22 Oct, opposite sign.** 22 Oct: wind forecast too calm, we over-forecast. 28 Oct:
+  too windy, we under-forecast. Both are 1-2 day weather misses.
+- **Side finding:** the 36 h-ahead wind forecast was above the archive wind on 12 of 13 days (mean
+  +8 km/h). Training uses forecast weather as well, so it is not leakage, but I haven't tested
+  whether it costs accuracy.
+- **Caveat:** one event; observed wind is the archive average over our points, not a per-farm
+  measurement. Not tested: whether a model given a persistence-weighted wind correction would
+  have done better.

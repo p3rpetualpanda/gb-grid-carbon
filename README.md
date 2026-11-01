@@ -64,7 +64,8 @@ scored forecast, ours lands 4.3 gCO₂/kWh above the true best on average, NESO'
 13 days is too few for a confidence interval (`analysis/live_bias.py` needs 45), and single days
 swing it: our daily bias ran from −21.0 to +26.2. 22 Oct was our worst day (MAE 28.5) because
 the weather forecast issued two days earlier had the wind dropping too soon. On 28–30 Oct both
-forecasts came in too low, NESO by more (MAE 42–50 vs our 15–23); the cause isn't checked yet.
+forecasts came in too low, NESO by more (MAE 42–50 vs our 15–23), as wind fell from 41 to 16 km/h
+over 27–29 Oct and the 1–2 day weather forecast had it too windy (same cause as 22 Oct, opposite sign).
 
 **NESO forecasts as inputs.** NESO's embedded wind/solar forecasts (always the vintage published
 before each forecast) cut the backtest MAE from <!-- bt:previous_model_mae -->27.0<!-- /bt --> to <!-- bt:v3_model_mae -->20.9<!-- /bt -->. NESO's transmission wind
