@@ -5,7 +5,9 @@ models:
     description: >
       The main analysis table: one row per half-hour (UTC) on a complete time spine, with national
       intensity, generation mix (wide), GB weather (hourly value applied to both half-hours) and UK
-      local calendar attributes. is_missing flags half-hours the API never returned.
+      local calendar attributes. is_missing flags half-hours the API never returned national
+      intensity for; is_missing_mix and is_missing_weather do the same for the generation mix and
+      the weather (observed weather lags about 2 days, so recent hours are legitimately missing).
     columns:
       - name: period_from
         data_tests: [unique, not_null]
@@ -22,7 +24,13 @@ models:
     description: Carbon Intensity API regions. 1-14 are DNO licence areas; 15-18 are aggregates.
     columns:
       - name: region_id
-        data_tests: [unique, not_null]
+        data_tests:
+          - unique
+          - not_null
+          # The set is fixed (1-14 DNO areas, 15-18 aggregates); a group-by alone can't miss one.
+          - accepted_values:
+              arguments:
+                values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
 
   - name: fct_regional_halfhourly
     description: Regional forecast intensity per half-hour (no actuals are published regionally).

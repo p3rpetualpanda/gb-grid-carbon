@@ -14,6 +14,8 @@ select
     i.actual_gco2_kwh,
     i.intensity_index,
     i.period_from is null as is_missing,
+    m.period_from is null as is_missing_mix,
+    w.hour_utc is null as is_missing_weather,
     m.gas_pct,
     m.coal_pct,
     m.nuclear_pct,

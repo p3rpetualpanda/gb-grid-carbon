@@ -86,3 +86,27 @@ jobs:
     steps:
       - id: deploy
         uses: actions/deploy-pages@v4
+
+  # An optional dataset (NESO) that is skipped in each of the last 3 runs is a layout change, not a
+  # blip: turn the run red so GitHub emails the owner. Needs its own token use, hence its own job.
+  health:
+    needs: run
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DB_TARGET: motherduck
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - run: pip install -e .
+
+      - name: Repeated optional-dataset failures
+        env:
+          MOTHERDUCK_TOKEN: ${{ secrets.MOTHERDUCK_TOKEN }}
+        run: gridcarbon check-warnings --runs 3

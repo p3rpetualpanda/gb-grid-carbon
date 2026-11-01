@@ -539,3 +539,18 @@ and the baselines unchanged). README, showcase and the dashboard caption updated
 - **Retries** now also cover `ChunkedEncodingError` and `ContentDecodingError` (body cut off).
 - **Not done: expected-row counts per window.** The fuel set and regional coverage differ in early
   history, so a fixed count would reject real windows; it needs per-period minimums first.
+
+## 1 Nov 2026: dbt checks and a repeated-failure alert
+
+- **Error-severity tests are bounded to the last 14 days.** The intensity range and generation-mix
+  sum tests scanned all history at error severity, so one old bad row would have failed every
+  later `dbt build` and stopped the pipeline before `predict`. A bad new row still fails the run.
+- **`dim_region` checks the fixed set of 18 region ids.** Its old `unique` test was true by
+  construction (the model is a group-by).
+- **Gap flags for mix and weather.** `fct_grid_halfhourly` gains `is_missing_mix` and
+  `is_missing_weather` (same grain), and a warn-only test covers the last 7 days of mix and the
+  14-to-4-day-old weather (observed weather lags about 2 days). `dbt build` on the local warehouse:
+  45 pass.
+- **`gridcarbon check-warnings` and a `health` job.** NESO datasets fail soft by design. If the
+  same dataset is skipped in each of the last 3 incremental runs, the new job fails the workflow
+  run, so GitHub emails the owner and the 7 h watchdog also fires (it counts successful runs).

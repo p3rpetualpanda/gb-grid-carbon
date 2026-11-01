@@ -164,5 +164,31 @@ def status() -> None:
         typer.echo("  " + " | ".join("" if v is None else str(v) for v in row))
 
 
+@app.command("check-warnings")
+def check_warnings(
+    runs: Annotated[int, typer.Option(help="Look at this many latest incremental runs.")] = 3,
+) -> None:
+    """Exit 1 if one dataset was skipped with a warning in each of the latest runs.
+
+    Optional datasets (NESO) fail soft so a portal blip cannot stop the forecast; a failure that
+    repeats is a layout change and needs a person.
+    """
+    con = connect(_setup())
+    rows = con.execute(
+        "SELECT error FROM meta.pipeline_runs WHERE command = 'incremental' AND status = 'success' "
+        "ORDER BY started_at DESC LIMIT ?",
+        [runs],
+    ).fetchall()
+    if len(rows) < runs:
+        typer.echo(f"Only {len(rows)} runs so far; need {runs}.")
+        return
+    skipped = [{w.split(":")[0] for w in (error or "").split("; ") if w} for (error,) in rows]
+    repeated = sorted(set.intersection(*skipped))
+    if repeated:
+        typer.echo(f"Skipped in each of the last {runs} runs: {', '.join(repeated)}")
+        raise typer.Exit(1)
+    typer.echo(f"No dataset skipped in each of the last {runs} runs.")
+
+
 if __name__ == "__main__":
     app()
