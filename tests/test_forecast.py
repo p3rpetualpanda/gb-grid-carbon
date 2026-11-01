@@ -404,3 +404,26 @@ def test_fit_tolerates_all_missing_wind_point_columns():
     test = fc.features(grid, wx, pd.DatetimeIndex([START + pd.Timedelta(days=27)]), set())
     assert test[fc.WIND_POINT_FEATURES].isna().all().all()
     assert np.isfinite(model.predict(test[fc.FEATURES])).all()
+
+
+def test_predict_live_ignores_a_weather_snapshot_after_issue(monkeypatch):
+    # A snapshot stamped after the NESO snapshot (a later run) must not feed this forecast.
+    con, issue, seen = live_setup(monkeypatch, covered=fc.HORIZON)
+    con.execute(
+        "insert into raw.weather_forecast_snapshots "
+        "select ?, time, point_id, 99.0, shortwave_radiation, temperature_2m "
+        "from raw.weather_forecast_snapshots",
+        [issue + pd.Timedelta(hours=1)],
+    )
+    fc.predict_live(con, issue.to_pydatetime())
+    assert (seen["X"][fc.WIND_POINT_FEATURES] == 20.0).all().all()
+
+
+def test_predict_live_warns_on_missing_base_inputs(monkeypatch, caplog):
+    con, issue, seen = live_setup(monkeypatch, covered=fc.HORIZON)
+    wx_hist = hourly_weather(20)
+    gappy = spine(20)
+    gappy.loc[gappy.index >= issue - pd.Timedelta(hours=12), ["y", "neso"]] = np.nan
+    monkeypatch.setattr(fc, "load_history", lambda con: (gappy, wx_hist[wx_hist.index < issue]))
+    fc.predict_live(con, issue.to_pydatetime())
+    assert "last_actual" in caplog.text

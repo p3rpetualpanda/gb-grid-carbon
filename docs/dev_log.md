@@ -406,6 +406,18 @@ generation fell 51.6% to 34.6% to 13.7% and gas rose 16.4% to 28.2% to 47.8% (qu
   measurement. Not tested: whether a model given a persistence-weighted wind correction would
   have done better.
 
+## 1 Nov 2026: forecast guards and the decay script
+
+- **Weather snapshot bounded by the issue time.** `predict_live` took the newest weather snapshot
+  in the table. A snapshot stamped after this run's NESO snapshot (a later run landing first)
+  would have fed a forecast issued earlier. It now takes the newest at or before the issue.
+- **Missing base inputs are logged.** Only NESO and wind-point gaps trigger the fallback; a gap in
+  `last_actual`, the lags or the base weather now logs a warning naming the column and the count
+  of leads affected. No new model label, no raise.
+- **Decay script.** `analysis/tune_decay.py` reproduces the choice of `PERSISTENCE_DECAY` from one
+  unblended backtest and writes `docs/decay_tuning.md`. The hand-typed numbers in the
+  `forecast.py` comment are replaced by a pointer to it. The decay itself is unchanged.
+
 ## 2026-11-01: loader safety (review findings)
 
 Three read-only reviews (security, silent failures, forecast leakage) found no exploit and no
