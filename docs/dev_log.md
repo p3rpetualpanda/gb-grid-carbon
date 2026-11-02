@@ -631,3 +631,10 @@ and the baselines unchanged). README, showcase and the dashboard caption updated
   Jake asked: the 24-hour labels had no am or pm.
 - `clock()` builds the text because strftime's `%-I` fails on Windows; Plotly uses `%-I %p`, so
   both give upper-case AM/PM. The daily trend chart shows dates only and is unchanged.
+
+## 2 Nov 2026: chart axes back to 24-hour
+
+- Jake wanted the chart axes on a 24-hour clock and the rest on 12-hour. Date-axis ticks show
+  `%H:%M` with the date; the typical-day and heatmap axes use `slot_label(h24=True)`. Text, metrics
+  and hover on the date charts stay AM/PM. The typical-day and heatmap hovers show the axis label,
+  so they read 24-hour.

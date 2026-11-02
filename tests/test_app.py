@@ -129,6 +129,7 @@ def test_slot_label():
     assert app.slot_label(0) == "12:00 AM" and app.slot_label(47) == "11:30 PM"
     assert app.slot_label(24) == "12:00 PM"
     assert app.slot_label(50) == "1:00 AM"  # a window ending after midnight
+    assert app.slot_label(47, h24=True) == "23:30" and app.slot_label(0, h24=True) == "00:00"
 
 
 def test_upcoming_drops_half_hours_already_past():
