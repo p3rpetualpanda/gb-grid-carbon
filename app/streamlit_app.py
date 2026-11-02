@@ -156,13 +156,15 @@ def clock(hour: int, minute: int) -> str:
     return f"{hour % 12 or 12}:{minute:02d} {'AM' if hour % 24 < 12 else 'PM'}"
 
 
-def slot_label(slot: int) -> str:
-    return clock(slot // 2 % 24, slot % 2 * 30)
+def slot_label(slot: int, h24: bool = False) -> str:
+    """Half-hour slot as a time: 12-hour in text, 24-hour (h24) on chart axes."""
+    hour, minute = slot // 2 % 24, slot % 2 * 30
+    return f"{hour:02d}:{minute:02d}" if h24 else clock(hour, minute)
 
 
 def am_pm_axis(fig) -> None:  # plotly is imported lazily in main()
-    """12-hour ticks and hover on a date x-axis (Plotly's automatic labels are 24-hour)."""
-    fig.update_xaxes(tickformat="%-I %p<br>%-d %b", hoverformat="%a %-d %b, %-I:%M %p")
+    """24-hour ticks with the date, and 12-hour hover, on a date x-axis."""
+    fig.update_xaxes(tickformat="%H:%M<br>%-d %b", hoverformat="%a %-d %b, %-I:%M %p")
 
 
 PLAIN_BANDS = {"0-6 h": "Next 6 hours", "6-12 h": "6–12 hours ahead",
@@ -572,7 +574,10 @@ def main() -> None:
             # A typical day in the chosen month: weekdays vs weekends, greenest window shaded.
             sel = typical[typical.month == m].sort_values("halfhour_slot")
             kinds = {False: "Weekdays", True: "Weekends"}
-            sel = sel.assign(time=sel.halfhour_slot.map(slot_label), kind=sel.is_weekend.map(kinds))
+            sel = sel.assign(
+                time=sel.halfhour_slot.map(lambda s: slot_label(s, h24=True)),
+                kind=sel.is_weekend.map(kinds),
+            )
             fig = px.line(
                 sel,
                 x="time",
@@ -608,7 +613,7 @@ def main() -> None:
 
             # Every month at a glance; hover for values. Darker = dirtier.
             heat = by_slot.set_axis([months[i - 1][:3] for i in by_slot.index])
-            heat.columns = [slot_label(c) for c in heat.columns]
+            heat.columns = [slot_label(c, h24=True) for c in heat.columns]
             fig = px.imshow(
                 heat,
                 color_continuous_scale=SEQ_BLUE,
