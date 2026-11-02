@@ -127,7 +127,10 @@ def upcoming(
 
 def hhmm(ts: pd.Timestamp) -> str:
     """Weekday and UK time, or a dash when there is no timestamp (an empty warehouse)."""
-    return "–" if pd.isna(ts) else ts.tz_convert(TZ).strftime("%a %H:%M")
+    if pd.isna(ts):
+        return "–"
+    ts = ts.tz_convert(TZ)
+    return f"{ts:%a} {clock(ts.hour, ts.minute)}"
 
 
 def motherduck_url() -> str:
@@ -148,8 +151,18 @@ EXAMPLE_SQL = """
 """
 
 
+def clock(hour: int, minute: int) -> str:
+    """12-hour clock, e.g. 8:30 AM (strftime's %-I fails on Windows; d3 charts use %p too)."""
+    return f"{hour % 12 or 12}:{minute:02d} {'AM' if hour % 24 < 12 else 'PM'}"
+
+
 def slot_label(slot: int) -> str:
-    return f"{slot // 2 % 24:02d}:{slot % 2 * 30:02d}"
+    return clock(slot // 2 % 24, slot % 2 * 30)
+
+
+def am_pm_axis(fig) -> None:  # plotly is imported lazily in main()
+    """12-hour ticks and hover on a date x-axis (Plotly's automatic labels are 24-hour)."""
+    fig.update_xaxes(tickformat="%-I %p<br>%-d %b", hoverformat="%a %-d %b, %-I:%M %p")
 
 
 PLAIN_BANDS = {"0-6 h": "Next 6 hours", "6-12 h": "6–12 hours ahead",
@@ -407,6 +420,7 @@ def main() -> None:
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             )
             fig.update_yaxes(hoverformat=".2f")
+            am_pm_axis(fig)
             st.plotly_chart(fig, width="stretch")
             bands = scored[scored.band != "All"].set_index("band")
             if bands.empty:
@@ -454,6 +468,7 @@ def main() -> None:
                     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
                 )
                 fig.update_yaxes(hoverformat=".2f")
+                am_pm_axis(fig)
                 st.plotly_chart(fig, width="stretch")
                 st.caption("More wind and sun means lower carbon. Each line is NESO's newest "
                            "forecast for that half-hour.")  # fmt: skip
@@ -492,6 +507,7 @@ def main() -> None:
                           labels=dict(period_from="", pct="% of generation", fuel=""))  # fmt: skip
             fig.update_layout(title="Last 7 days", hovermode="x unified")
             fig.update_yaxes(hoverformat=".2f")
+            am_pm_axis(fig)
             c2.plotly_chart(fig, width="stretch")
             st.caption("Other = biomass, hydro, coal and other sources. Shares of GB generation "
                        "(Carbon Intensity API).")  # fmt: skip
@@ -746,6 +762,7 @@ def main() -> None:
 
             example = q(EXAMPLE_SQL)
             if not example.empty:  # none yet in a forecast's first 48 h
+                issued = uk(example.issued_at.iloc[0])
                 fig = go.Figure()
                 for col, name, colour, dash in (
                     ("actual_gco2_kwh", "What actually happened", BLUE, "solid"),
@@ -756,12 +773,14 @@ def main() -> None:
                                     line=dict(color=colour, width=2, dash=dash))  # fmt: skip
                 fig.update_layout(
                     title="Example: the forecast made "
-                    f"{uk(example.issued_at.iloc[0]):%a %d %b, %H:%M} vs what happened (UK time)",
+                    f"{issued:%a %d %b}, {clock(issued.hour, issued.minute)}"
+                    " vs what happened (UK time)",
                     yaxis_title="gCO₂/kWh",
                     hovermode="x unified",
                     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
                 )
                 fig.update_yaxes(hoverformat=".2f")
+                am_pm_axis(fig)
                 st.plotly_chart(fig, width="stretch")
                 st.caption("The most recent forecast whose whole 48 hours have now happened.")
 
