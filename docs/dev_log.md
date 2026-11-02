@@ -623,3 +623,11 @@ and the baselines unchanged). README, showcase and the dashboard caption updated
   says forecast not measured, 30-day average, 14 regions. Accuracy: latest model version and how
   much of the scored record it covers (v4.1 had none yet, so the caption says so, #56).
 - Left for after the interview: eight more additions, ordered in `tasks/app-plan.md` (not committed).
+
+## 2 Nov 2026: 12-hour times in the app
+
+- Every time the app shows uses AM/PM: metrics, captions, the typical-day and heatmap axes, and
+  the date axes and hover text of the four time charts (Now, wind and solar, example, 7-day mix).
+  Jake asked: the 24-hour labels had no am or pm.
+- `clock()` builds the text because strftime's `%-I` fails on Windows; Plotly uses `%-I %p`, so
+  both give upper-case AM/PM. The daily trend chart shows dates only and is unchanged.

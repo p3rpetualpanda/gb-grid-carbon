@@ -126,8 +126,9 @@ def test_day_windows_wrap_past_midnight():
 
 
 def test_slot_label():
-    assert app.slot_label(0) == "00:00" and app.slot_label(47) == "23:30"
-    assert app.slot_label(50) == "01:00"  # a window ending after midnight
+    assert app.slot_label(0) == "12:00 AM" and app.slot_label(47) == "11:30 PM"
+    assert app.slot_label(24) == "12:00 PM"
+    assert app.slot_label(50) == "1:00 AM"  # a window ending after midnight
 
 
 def test_upcoming_drops_half_hours_already_past():
@@ -165,7 +166,8 @@ def test_typical_day_weights_weekdays_and_weekends_by_count():
 
 def test_hhmm_survives_missing_timestamps():
     assert app.hhmm(pd.NaT) == "–"
-    assert app.hhmm(pd.Timestamp("2024-07-01 12:00", tz="UTC")) == "Mon 13:00"
+    assert app.hhmm(pd.Timestamp("2024-07-01 12:00", tz="UTC")) == "Mon 1:00 PM"
+    assert app.hhmm(pd.Timestamp("2024-07-01 23:30", tz="UTC")) == "Tue 12:30 AM"
 
 
 def test_motherduck_database_follows_the_pipeline_setting(monkeypatch):
